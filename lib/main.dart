@@ -13,10 +13,7 @@ class EstudIAApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'EstudIA',
-      theme: ThemeData(
-        fontFamily: 'Montserrat',
-        useMaterial3: true, // Opcional, si estás usando Material 3
-      ),
+      theme: ThemeData(fontFamily: 'Montserrat', useMaterial3: true),
       home: const PantallaInicio(),
     );
   }

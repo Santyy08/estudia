@@ -7,7 +7,9 @@ class PantallaAsistenteIA extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Asistente IA')),
-      body: const Center(child: Text('Interfaz del asistente de inteligencia artificial')),
+      body: const Center(
+        child: Text('Interfaz del asistente de inteligencia artificial'),
+      ),
     );
   }
 }

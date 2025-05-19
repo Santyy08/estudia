@@ -3,6 +3,7 @@ import 'pantalla_plan_estudio.dart';
 import 'pantalla_asistente_ia.dart';
 import 'pantalla_objetivos.dart';
 import 'pantalla_tecnicas.dart';
+import 'pantalla_calendario.dart';
 
 class PantallaInicio extends StatelessWidget {
   const PantallaInicio({super.key});
@@ -28,35 +29,49 @@ class PantallaInicio extends StatelessWidget {
               const SizedBox(height: 8),
               const Text(
                 'Bienvenido a EstudIA 📚',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.black54,
-                ),
+                style: TextStyle(fontSize: 18, color: Colors.black54),
               ),
               const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDDE7FB),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_today, size: 32, color: Color(0xFF4C63B6)),
-                    const SizedBox(width: 16),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Hoy es Martes, 12 de abril',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        SizedBox(height: 4),
-                        Text('Estudias: 3 materias'),
-                        Text('Total: 2 h 30 min'),
-                      ],
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PantallaCalendario(),
                     ),
-                  ],
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDDE7FB),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_today,
+                        size: 32,
+                        color: Color(0xFF4C63B6),
+                      ),
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Hoy es Martes, 12 de abril',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text('Estudias: 3 materias'),
+                          Text('Total: 2 h 30 min'),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
@@ -114,7 +129,7 @@ class PantallaInicio extends StatelessWidget {
                     style: TextStyle(fontSize: 16),
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),
@@ -122,17 +137,17 @@ class PantallaInicio extends StatelessWidget {
     );
   }
 
-  Widget _buildOpcion(BuildContext context, {
+  Widget _buildOpcion(
+    BuildContext context, {
     required IconData icon,
     required Color color,
     required String label,
     required Widget page,
   }) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => page),
-      ),
+      onTap:
+          () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(

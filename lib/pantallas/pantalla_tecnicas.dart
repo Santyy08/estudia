@@ -7,7 +7,9 @@ class PantallaTecnicasEstudio extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Técnicas de Estudio')),
-      body: const Center(child: Text('Métodos y técnicas de estudio recomendadas')),
+      body: const Center(
+        child: Text('Métodos y técnicas de estudio recomendadas'),
+      ),
     );
   }
 }
