@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
 import 'pantalla_plan_estudio.dart';
 import 'pantalla_asistente_ia.dart';
 import 'pantalla_objetivos.dart';
@@ -57,15 +59,15 @@ class PantallaInicio extends StatelessWidget {
                       const SizedBox(width: 16),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
-                            'Hoy es Martes, 12 de abril',
-                            style: TextStyle(
+                            'Hoy es ${DateFormat('EEEE, d \'de\' MMMM').format(DateTime.now())}',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          SizedBox(height: 4),
+                          const SizedBox(height: 4),
                           Text('Estudias: 3 materias'),
                           Text('Total: 2 h 30 min'),
                         ],

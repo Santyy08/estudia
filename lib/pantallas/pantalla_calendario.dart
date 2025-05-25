@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart' show DateFormat, toBeginningOfSentenceCase;
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 class PantallaCalendario extends StatefulWidget {
   const PantallaCalendario({super.key});
@@ -14,40 +15,34 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
   final Map<DateTime, List<Map<String, dynamic>>> _tareas = {};
 
   @override
-  Widget build(BuildContext context) {
-    final month = DateFormat('MMMM').format(_focusedMonth);
-    final year = _focusedMonth.year;
+  void initState() {
+    super.initState();
+    initializeDateFormatting('es_ES', null);
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    final String mes = DateFormat('MMMM', 'es_ES').format(_focusedMonth);
+    final int year = _focusedMonth.year;
     final tareasDelDia = _tareas[_selectedDate] ?? [];
 
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Calendario'),
+        title: const Text('Calendario EstudIA'),
         backgroundColor: Colors.white,
-        elevation: 0,
         foregroundColor: Colors.black,
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.calendar_view_day_outlined),
+            icon: const Icon(Icons.view_week),
             onPressed: () {
-              // Aquí podrías navegar al cronograma diario
-              showDialog(
-                context: context,
-                builder:
-                    (_) => AlertDialog(
-                      title: const Text("Cronograma del día"),
-                      content: Text(
-                        "Mostrando cronograma para: ${_selectedDate != null ? DateFormat('dd MMMM yyyy').format(_selectedDate!) : 'ningún día'}",
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text("Cerrar"),
-                        ),
-                      ],
-                    ),
-              );
+              Navigator.pushNamed(context, '/semana');
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.view_agenda),
+            onPressed: () {
+              Navigator.pushNamed(context, '/agenda');
             },
           ),
         ],
@@ -62,9 +57,9 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '${toBeginningOfSentenceCase(month)} $year',
+                    '${mes[0].toUpperCase()}${mes.substring(1)} $year',
                     style: const TextStyle(
-                      fontSize: 28,
+                      fontSize: 26,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -74,13 +69,10 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
                         icon: const Icon(Icons.chevron_left),
                         onPressed: () {
                           setState(() {
-                            int newMonth = _focusedMonth.month - 1;
-                            int newYear = _focusedMonth.year;
-                            if (newMonth < 1) {
-                              newMonth = 12;
-                              newYear -= 1;
-                            }
-                            _focusedMonth = DateTime(newYear, newMonth);
+                            _focusedMonth = DateTime(
+                              _focusedMonth.year,
+                              _focusedMonth.month - 1,
+                            );
                           });
                         },
                       ),
@@ -88,13 +80,10 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
                         icon: const Icon(Icons.chevron_right),
                         onPressed: () {
                           setState(() {
-                            int newMonth = _focusedMonth.month + 1;
-                            int newYear = _focusedMonth.year;
-                            if (newMonth > 12) {
-                              newMonth = 1;
-                              newYear += 1;
-                            }
-                            _focusedMonth = DateTime(newYear, newMonth);
+                            _focusedMonth = DateTime(
+                              _focusedMonth.year,
+                              _focusedMonth.month + 1,
+                            );
                           });
                         },
                       ),
@@ -102,29 +91,31 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               _buildCalendar(),
-              const SizedBox(height: 32),
-              if (_selectedDate != null && tareasDelDia.isNotEmpty)
-                ...tareasDelDia.map(
-                  (tarea) => _buildCard(
-                    tarea['tipo'],
-                    tarea['contenido'],
-                    tarea['icono'],
-                    tarea['color'],
-                    hora: tarea['hora'],
-                  ),
+              const SizedBox(height: 16),
+              if (_selectedDate != null)
+                Expanded(
+                  child:
+                      tareasDelDia.isEmpty
+                          ? const Center(
+                            child: Text('No hay tareas para este día.'),
+                          )
+                          : ListView(
+                            children:
+                                tareasDelDia
+                                    .map((tarea) => _buildCard(tarea))
+                                    .toList(),
+                          ),
                 ),
-              if (_selectedDate != null && tareasDelDia.isEmpty)
-                const Text("No hay tareas para este día."),
             ],
           ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _mostrarDialogoTarea(context),
-        backgroundColor: Colors.teal[200],
-        child: const Icon(Icons.add, color: Colors.white),
+        backgroundColor: Colors.teal,
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -145,15 +136,12 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
     rows.add(
       TableRow(
         children:
-            ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+            ['D', 'L', 'M', 'M', 'J', 'V', 'S']
                 .map(
-                  (day) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(
-                        day,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                  (d) => Center(
+                    child: Text(
+                      d,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
                 )
@@ -171,23 +159,18 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
             _focusedMonth.month,
             day,
           );
+          final bool isSelected =
+              _selectedDate != null &&
+              currentDay.difference(_selectedDate!).inDays == 0;
           week.add(
             GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedDate = currentDay;
-                });
-              },
+              onTap: () => setState(() => _selectedDate = currentDay),
               child: Container(
-                decoration:
-                    _selectedDate?.day == day &&
-                            _selectedDate?.month == _focusedMonth.month &&
-                            _selectedDate?.year == _focusedMonth.year
-                        ? BoxDecoration(
-                          color: Colors.teal[100],
-                          shape: BoxShape.circle,
-                        )
-                        : null,
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? Colors.teal[200] : null,
+                ),
                 alignment: Alignment.center,
                 height: 36,
                 child: Text('$day'),
@@ -195,7 +178,7 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
             ),
           );
         } else {
-          week.add(const SizedBox(height: 36));
+          week.add(const SizedBox());
         }
         day++;
       }
@@ -206,60 +189,27 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
     return Table(children: rows);
   }
 
-  Widget _buildCard(
-    String title,
-    String content,
-    IconData icon,
-    Color color, {
-    String? hora,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    content,
-                    style: const TextStyle(fontSize: 14),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+  Widget _buildCard(Map<String, dynamic> tarea) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: Icon(
+          tarea['icono'] ?? Icons.book,
+          color: tarea['color'] ?? Colors.grey,
+        ),
+        title: Text(tarea['tipo'] ?? 'Tarea'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(tarea['contenido'] ?? ''),
+            if (tarea['hora'] != null)
+              Text(
+                'Hora: ${tarea['hora']}',
+                style: const TextStyle(fontSize: 12),
               ),
-            ],
-          ),
-          if (hora != null)
-            Text(
-              hora,
-              style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -268,24 +218,25 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
     final tipoController = TextEditingController();
     final contenidoController = TextEditingController();
     final horaController = TextEditingController();
+    Color colorSeleccionado = Colors.teal;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) {
+      builder: (_) {
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: tipoController,
                   decoration: const InputDecoration(
-                    labelText: 'Tipo (Ej: Clase, Tarea, Objetivo)',
+                    labelText: 'Tipo (Ej: Clase, Tarea)',
                   ),
                 ),
                 TextField(
@@ -299,36 +250,51 @@ class _PantallaCalendarioState extends State<PantallaCalendario> {
                   ),
                 ),
                 const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Text('Color:'),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap:
+                          () => setState(() => colorSeleccionado = Colors.teal),
+                      child: CircleAvatar(backgroundColor: Colors.teal),
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap:
+                          () =>
+                              setState(() => colorSeleccionado = Colors.purple),
+                      child: CircleAvatar(backgroundColor: Colors.purple),
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap:
+                          () =>
+                              setState(() => colorSeleccionado = Colors.orange),
+                      child: CircleAvatar(backgroundColor: Colors.orange),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () {
-                    final tipo = tipoController.text.trim();
-                    final contenido = contenidoController.text.trim();
-                    final hora = horaController.text.trim();
-                    if (tipo.isNotEmpty &&
-                        contenido.isNotEmpty &&
-                        _selectedDate != null) {
-                      final tarea = {
-                        'tipo': tipo,
-                        'contenido': contenido,
-                        'hora': hora.isNotEmpty ? hora : null,
-                        'icono': Icons.circle,
-                        'color':
-                            tipo.toLowerCase() == 'tarea'
-                                ? Colors.teal
-                                : tipo.toLowerCase() == 'objetivo'
-                                ? Colors.green
-                                : Colors.grey,
-                      };
-                      setState(() {
-                        _tareas[_selectedDate!] = [
-                          ...?_tareas[_selectedDate],
-                          tarea,
-                        ];
-                      });
-                      Navigator.pop(context);
-                    }
+                    if (_selectedDate == null) return;
+                    final tarea = {
+                      'tipo': tipoController.text.trim(),
+                      'contenido': contenidoController.text.trim(),
+                      'hora': horaController.text.trim(),
+                      'icono': Icons.circle,
+                      'color': colorSeleccionado,
+                    };
+                    setState(() {
+                      _tareas[_selectedDate!] = [
+                        ...?_tareas[_selectedDate],
+                        tarea,
+                      ];
+                    });
+                    Navigator.pop(context);
                   },
-                  child: const Text('Agregar'),
+                  child: const Text('Agregar Tarea'),
                 ),
               ],
             ),

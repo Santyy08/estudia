@@ -7,7 +7,20 @@ class PantallaPlanEstudio extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Plan de Estudio')),
-      body: const Center(child: Text('Contenido del plan de estudio')),
+      body: Center(
+        child: Container(
+          height: 150,
+          width: 600,
+          decoration: BoxDecoration(
+            color: const Color(0xFFDDE7FB),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            "este es el plan de estudio",
+            style: TextStyle(color: Colors.red),
+          ),
+        ),
+      ),
     );
   }
 }
