@@ -1,198 +1,276 @@
+// lib/vista_calendario/vista_semana.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-class VistaSemana extends StatefulWidget {
-  const VistaSemana({super.key});
+import '../providers/calendario_provider.dart';
+import '../widgets/tarjeta_eventos.dart';
+import '../widgets/editar_evento_form.dart';
 
-  @override
-  State<VistaSemana> createState() => _VistaSemanaState();
-}
-
-class _VistaSemanaState extends State<VistaSemana> {
-  DateTime _startOfWeek = _getStartOfWeek(DateTime.now());
-  final Map<DateTime, List<Map<String, dynamic>>> _tareas = {};
-
-  static DateTime _getStartOfWeek(DateTime date) {
-    return date.subtract(Duration(days: date.weekday % 7));
-  }
-
-  void _agregarTarea(BuildContext context, DateTime fecha) {
-    final tipoController = TextEditingController();
-    final contenidoController = TextEditingController();
-    final horaController = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder:
-          (context) => Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: tipoController,
-                    decoration: const InputDecoration(
-                      labelText: 'Tipo (Clase, Tarea, Objetivo)',
-                    ),
-                  ),
-                  TextField(
-                    controller: contenidoController,
-                    decoration: const InputDecoration(labelText: 'Contenido'),
-                  ),
-                  TextField(
-                    controller: horaController,
-                    decoration: const InputDecoration(
-                      labelText: 'Hora (opcional)',
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      final tipo = tipoController.text.trim();
-                      final contenido = contenidoController.text.trim();
-                      final hora = horaController.text.trim();
-                      if (tipo.isNotEmpty && contenido.isNotEmpty) {
-                        final tarea = {
-                          'tipo': tipo,
-                          'contenido': contenido,
-                          'hora': hora.isNotEmpty ? hora : null,
-                          'icono': Icons.circle,
-                          'color':
-                              tipo.toLowerCase() == 'tarea'
-                                  ? Colors.teal
-                                  : tipo.toLowerCase() == 'objetivo'
-                                  ? Colors.green
-                                  : Colors.grey,
-                        };
-                        setState(() {
-                          _tareas[fecha] = [...?_tareas[fecha], tarea];
-                        });
-                        Navigator.pop(context);
-                      }
-                    },
-                    child: const Text('Agregar'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-    );
-  }
-
-  Widget _buildTareaCard(Map<String, dynamic> tarea) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Icon(tarea['icono'], color: tarea['color'], size: 20),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tarea['tipo'],
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(tarea['contenido'], overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ],
-          ),
-          if (tarea['hora'] != null)
-            Text(tarea['hora'], style: const TextStyle(color: Colors.grey)),
-        ],
-      ),
-    );
-  }
+class VistaSemana extends StatelessWidget {
+  const VistaSemana({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final diasSemana = List.generate(
-      7,
-      (i) => _startOfWeek.add(Duration(days: i)),
-    );
+    return Consumer<CalendarioProvider>(
+      builder: (context, calendarioProv, child) {
+        final fechaSeleccionada = calendarioProv.fechaSeleccionada;
+        final startOfWeek = fechaSeleccionada.subtract(
+          Duration(days: fechaSeleccionada.weekday % 7),
+        ); // Domingo
+        final endOfWeek = startOfWeek.add(const Duration(days: 6));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Semana - EstudIA'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            onPressed: () {
-              setState(() {
-                _startOfWeek = _startOfWeek.subtract(const Duration(days: 7));
-              });
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: () {
-              setState(() {
-                _startOfWeek = _startOfWeek.add(const Duration(days: 7));
-              });
-            },
-          ),
-        ],
-      ),
-      backgroundColor: Colors.grey[100],
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: diasSemana.length,
-        itemBuilder: (context, index) {
-          final dia = diasSemana[index];
-          final tareas = _tareas[dia] ?? [];
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        final eventosDeLaSemana = calendarioProv.eventosDeLaSemana(
+          fechaSeleccionada,
+        );
+
+        // Generar las horas desde las 8 AM hasta las 20 PM (ajustable)
+        final List<int> hours = List.generate(
+          13,
+          (index) => 8 + index,
+        ); // 8 AM a 8 PM
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8.0,
+                vertical: 4.0,
+              ),
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    DateFormat('EEEE d MMM', 'es_ES').format(dia),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, size: 20),
+                    onPressed: () {
+                      calendarioProv.cambiarFechaSeleccionada(
+                        fechaSeleccionada.subtract(const Duration(days: 7)),
+                      );
+                    },
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        '${DateFormat('MMM dd', 'es').format(startOfWeek)} - ${DateFormat('MMM dd', 'es').format(endOfWeek)}',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(
-                      Icons.add_circle_outline,
-                      color: Colors.teal,
-                    ),
-                    onPressed: () => _agregarTarea(context, dia),
+                    icon: const Icon(Icons.arrow_forward_ios, size: 20),
+                    onPressed: () {
+                      calendarioProv.cambiarFechaSeleccionada(
+                        fechaSeleccionada.add(const Duration(days: 7)),
+                      );
+                    },
                   ),
                 ],
               ),
-              if (tareas.isEmpty)
-                const Text(
-                  "No hay tareas",
-                  style: TextStyle(color: Colors.grey),
+            ),
+            const Divider(),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.vertical,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Columna de Horas
+                    SizedBox(
+                      width: 60, // Ancho fijo para la columna de horas
+                      child: Column(
+                        children: [
+                          const SizedBox(
+                            height: 40,
+                          ), // Espacio para los nombres de los días
+                          ...hours
+                              .map(
+                                (hour) => SizedBox(
+                                  height:
+                                      60, // Altura de cada slot de hora (ajustable)
+                                  child: Center(
+                                    child: Text(
+                                      '${hour} AM',
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Fila de Días de la Semana
+                          Container(
+                            height: 40,
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(color: Colors.grey[300]!),
+                              ),
+                            ),
+                            child: Row(
+                              children: List.generate(7, (index) {
+                                final day = startOfWeek.add(
+                                  Duration(days: index),
+                                );
+                                return Expanded(
+                                  child: Center(
+                                    child: Text(
+                                      DateFormat(
+                                        'E',
+                                        'es',
+                                      ).format(day), // Mon, Tue, etc.
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                          // Área de Eventos por Días y Horas
+                          Stack(
+                            children: [
+                              // Líneas Horizontales de la Grilla (horas)
+                              ...hours
+                                  .map(
+                                    (_) => Container(
+                                      height:
+                                          60, // Misma altura que los slots de hora
+                                      decoration: BoxDecoration(
+                                        border: Border(
+                                          bottom: BorderSide(
+                                            color: Colors.grey[200]!,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              // Líneas Verticales de la Grilla (días)
+                              Positioned.fill(
+                                child: Row(
+                                  children: List.generate(
+                                    7,
+                                    (index) => Expanded(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          border:
+                                              index < 6
+                                                  ? Border(
+                                                    right: BorderSide(
+                                                      color: Colors.grey[200]!,
+                                                    ),
+                                                  )
+                                                  : null,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Eventos Posicionados
+                              ...eventosDeLaSemana.map((evento) {
+                                final dayIndex =
+                                    evento.fechaInicio
+                                        .difference(startOfWeek)
+                                        .inDays;
+                                if (dayIndex < 0 || dayIndex > 6)
+                                  return const SizedBox.shrink(); // Evento fuera de la semana
+
+                                final startHour =
+                                    evento.fechaInicio.hour +
+                                    evento.fechaInicio.minute / 60;
+                                final endHour =
+                                    evento.fechaFin.hour +
+                                    evento.fechaFin.minute / 60;
+
+                                // Calcular top y height en base a la escala de 60px por hora
+                                final top = (startHour - hours.first) * 60.0;
+                                final height = (endHour - startHour) * 60.0;
+
+                                if (top < 0 || height <= 0)
+                                  return const SizedBox.shrink(); // Evento fuera del rango de horas mostrado
+
+                                return Positioned(
+                                  left:
+                                      (MediaQuery.of(context).size.width - 60) /
+                                          7 *
+                                          dayIndex +
+                                      2, // Ancho de la columna del día
+                                  top: top + 2, // Margen superior
+                                  width:
+                                      (MediaQuery.of(context).size.width - 60) /
+                                          7 -
+                                      4, // Ancho del evento
+                                  height: height - 4, // Altura del evento
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      calendarioProv.abrirFormularioEvento(
+                                        context,
+                                        evento: evento,
+                                      );
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: evento.color,
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: evento.color!.withOpacity(0.5),
+                                        ),
+                                      ),
+                                      padding: const EdgeInsets.all(4),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            evento.titulo,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.black87,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          if (height >
+                                              30) // Mostrar hora solo si hay espacio
+                                            Text(
+                                              '${DateFormat('HH:mm').format(evento.fechaInicio)}',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(fontSize: 10),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ...tareas.map(_buildTareaCard),
-              const SizedBox(height: 16),
-            ],
-          );
-        },
-      ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

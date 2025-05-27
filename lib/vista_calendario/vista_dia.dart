@@ -1,135 +1,159 @@
+// lib/vista_calendario/vista_dia.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-class VistaDia extends StatefulWidget {
-  final DateTime fechaSeleccionada;
-  final List<Map<String, dynamic>> tareasDelDia;
+import '../providers/calendario_provider.dart';
+import '../widgets/tarjeta_eventos.dart';
+import '../widgets/editar_evento_form.dart';
 
-  const VistaDia({
-    super.key,
-    required this.fechaSeleccionada,
-    required this.tareasDelDia,
-  });
-
-  @override
-  State<VistaDia> createState() => _VistaDiaState();
-}
-
-class _VistaDiaState extends State<VistaDia> {
-  final ScrollController _scrollController = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    // Opcional: Scroll automático a la hora actual
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final horaActual = TimeOfDay.now().hour;
-      _scrollController.jumpTo((horaActual - 1) * 80.0);
-    });
-  }
+class VistaDia extends StatelessWidget {
+  const VistaDia({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final fechaTexto = DateFormat(
-      'EEEE d MMMM y',
-      'es_ES',
-    ).format(widget.fechaSeleccionada);
+    return Consumer<CalendarioProvider>(
+      builder: (context, calendarioProv, child) {
+        final fechaActual = calendarioProv.fechaSeleccionada;
+        final eventosDelDia = calendarioProv.eventosDelDia(fechaActual)
+          ..sort((a, b) => a.fechaInicio.compareTo(b.fechaInicio));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("Día: $fechaTexto"),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: ListView.builder(
-        controller: _scrollController,
-        itemCount: 24,
-        itemBuilder: (context, index) {
-          final hora = TimeOfDay(hour: index, minute: 0);
-          final tareasEnEstaHora =
-              widget.tareasDelDia.where((tarea) {
-                final tareaHora = tarea['hora'];
-                if (tareaHora == null || tareaHora.isEmpty) return false;
-                try {
-                  final tareaTime = DateFormat("HH:mm").parse(tareaHora);
-                  return tareaTime.hour == hora.hour;
-                } catch (_) {
-                  return false;
-                }
-              }).toList();
-
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Colors.grey, width: 0.3),
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, size: 20),
+                    onPressed: () {
+                      calendarioProv.cambiarFechaSeleccionada(
+                        fechaActual.subtract(const Duration(days: 1)),
+                      );
+                    },
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        DateFormat(
+                          'EEEE, dd \'de\' MMMM',
+                          'es',
+                        ).format(fechaActual),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_forward_ios, size: 20),
+                    onPressed: () {
+                      calendarioProv.cambiarFechaSeleccionada(
+                        fechaActual.add(const Duration(days: 1)),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  hora.format(context),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                if (tareasEnEstaHora.isEmpty)
-                  const Text(
-                    'Sin eventos',
-                    style: TextStyle(color: Colors.grey),
-                  )
-                else
-                  ...tareasEnEstaHora.map((tarea) => _buildCard(tarea)),
-              ],
+            const Divider(),
+            Expanded(
+              child:
+                  eventosDelDia.isEmpty
+                      ? Center(
+                        child: Text(
+                          'No hay eventos para este día.',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      )
+                      : ListView.builder(
+                        itemCount: eventosDelDia.length,
+                        itemBuilder: (context, index) {
+                          final evento = eventosDelDia[index];
+                          return Card(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 6,
+                            ),
+                            elevation: 3,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: InkWell(
+                              onTap: () {
+                                calendarioProv.abrirFormularioEvento(
+                                  context,
+                                  evento: evento,
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        color: evento.color,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            evento.titulo,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '${DateFormat('HH:mm').format(evento.fechaInicio)} - ${DateFormat('HH:mm').format(evento.fechaFin)}',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium?.copyWith(
+                                              color: Colors.grey[700],
+                                            ),
+                                          ),
+                                          if (evento
+                                              .descripcion
+                                              .isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              evento.descripcion,
+                                              style:
+                                                  Theme.of(
+                                                    context,
+                                                  ).textTheme.bodySmall,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildCard(Map<String, dynamic> tarea) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
-        ],
-        border: Border.all(color: tarea['color'] ?? Colors.grey.shade300),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(tarea['icono'] ?? Icons.circle, color: tarea['color'], size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tarea['tipo'] ?? 'Evento',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                if (tarea['contenido'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(tarea['contenido']),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 }

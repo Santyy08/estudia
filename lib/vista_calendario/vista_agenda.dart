@@ -1,252 +1,180 @@
+// lib/vista_calendario/vista_agenda.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-class VistaAgenda extends StatefulWidget {
-  const VistaAgenda({super.key});
+import '../providers/calendario_provider.dart';
+import '../widgets/tarjeta_eventos.dart';
+import '../widgets/editar_evento_form.dart';
 
-  @override
-  State<VistaAgenda> createState() => _VistaAgendaState();
-}
-
-class _VistaAgendaState extends State<VistaAgenda> {
-  final DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDate;
-  final Map<DateTime, List<Map<String, dynamic>>> _tareas = {};
+class VistaAgenda extends StatelessWidget {
+  const VistaAgenda({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Agenda")),
-      body: Column(
-        children: [_buildWeekCalendar(), const Divider(), _buildTareasDia()],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _mostrarDialogoTarea(context),
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
+    return Consumer<CalendarioProvider>(
+      builder: (context, calendarioProv, child) {
+        final eventosFuturos = calendarioProv.eventosFiltrados();
 
-  Widget _buildWeekCalendar() {
-    final inicioSemana = _focusedDay.subtract(
-      Duration(days: _focusedDay.weekday - 1),
-    );
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: List.generate(7, (index) {
-        final dia = inicioSemana.add(Duration(days: index));
-        final seleccionado =
-            _selectedDate != null && _esMismoDia(dia, _selectedDate!);
-        return GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedDate = dia;
-            });
-          },
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: seleccionado ? Colors.blue : Colors.transparent,
-              borderRadius: BorderRadius.circular(10),
+        if (eventosFuturos.isEmpty) {
+          return Center(
+            child: Text(
+              'No hay eventos futuros en tu agenda.',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
-            child: Column(
+          );
+        }
+
+        final Map<DateTime, List<TarjetaEventos>> eventosAgrupados = {};
+        for (var evento in eventosFuturos) {
+          final fechaSinHora = DateTime(
+            evento.fechaInicio.year,
+            evento.fechaInicio.month,
+            evento.fechaInicio.day,
+          );
+          if (!eventosAgrupados.containsKey(fechaSinHora)) {
+            eventosAgrupados[fechaSinHora] = [];
+          }
+          eventosAgrupados[fechaSinHora]!.add(evento);
+        }
+
+        final fechasOrdenadas =
+            eventosAgrupados.keys.toList()..sort((a, b) => a.compareTo(b));
+
+        return ListView.builder(
+          itemCount: fechasOrdenadas.length,
+          itemBuilder: (context, sectionIndex) {
+            final fecha = fechasOrdenadas[sectionIndex];
+            final eventosDelDia =
+                eventosAgrupados[fecha]!
+                  ..sort((a, b) => a.fechaInicio.compareTo(b.fechaInicio));
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  DateFormat.E().format(dia),
-                  style: const TextStyle(fontSize: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    DateFormat(
+                      'EEEE, dd \'de\' MMMM \'de\' yyyy',
+                      'es',
+                    ).format(fecha),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  ),
                 ),
-                Text(
-                  '${dia.day}',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: eventosDelDia.length,
+                  itemBuilder: (context, eventIndex) {
+                    final evento = eventosDelDia[eventIndex];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: InkWell(
+                        onTap: () {
+                          calendarioProv.abrirFormularioEvento(
+                            context,
+                            evento: evento,
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: evento.color,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      evento.titulo,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyLarge?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${DateFormat('HH:mm', 'es').format(evento.fechaInicio)} - ${DateFormat('HH:mm', 'es').format(evento.fechaFin)}',
+                                      style:
+                                          Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                    if (evento.descripcion.isNotEmpty)
+                                      Text(
+                                        evento.descripcion,
+                                        style:
+                                            Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    if (evento.etiquetas.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 4.0,
+                                        ),
+                                        child: Wrap(
+                                          spacing: 6.0,
+                                          runSpacing: 0.0,
+                                          children:
+                                              evento.etiquetas
+                                                  .map(
+                                                    (tag) => Chip(
+                                                      label: Text(
+                                                        tag,
+                                                        style: const TextStyle(
+                                                          fontSize: 10,
+                                                        ),
+                                                      ),
+                                                      visualDensity:
+                                                          VisualDensity.compact,
+                                                      materialTapTargetSize:
+                                                          MaterialTapTargetSize
+                                                              .shrinkWrap,
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _buildTareasDia() {
-    final tareas = _selectedDate != null ? _tareas[_selectedDate!] ?? [] : [];
-    return Expanded(
-      child:
-          tareas.isEmpty
-              ? const Center(child: Text("Sin tareas para este día."))
-              : ListView.builder(
-                itemCount: tareas.length,
-                itemBuilder: (context, index) {
-                  final tarea = tareas[index];
-                  return GestureDetector(
-                    onLongPress:
-                        () => _mostrarDialogoTarea(
-                          context,
-                          tareaExistente: tarea,
-                        ),
-                    child: _buildCard(
-                      tarea['tipo'],
-                      tarea['contenido'],
-                      hora: tarea['hora'],
-                      icono: tarea['icono'],
-                      color: tarea['color'],
-                    ),
-                  );
-                },
-              ),
-    );
-  }
-
-  Widget _buildCard(
-    String titulo,
-    String subtitulo, {
-    IconData? icono,
-    String? hora,
-    Color? color,
-  }) {
-    return Card(
-      color: color ?? Colors.teal[100],
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: ListTile(
-        leading: Icon(icono ?? Icons.book, color: Colors.black54),
-        title: Text(titulo),
-        subtitle: Text('$subtitulo${hora != null ? '\n$hora' : ''}'),
-      ),
-    );
-  }
-
-  void _mostrarDialogoTarea(
-    BuildContext context, {
-    Map<String, dynamic>? tareaExistente,
-  }) {
-    final tipoController = TextEditingController(
-      text: tareaExistente?['tipo'] ?? '',
-    );
-    final contenidoController = TextEditingController(
-      text: tareaExistente?['contenido'] ?? '',
-    );
-    final horaController = TextEditingController(
-      text: tareaExistente?['hora'] ?? '',
-    );
-    Color colorSeleccionado = tareaExistente?['color'] ?? Colors.teal;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Wrap(
-                  children: [
-                    TextField(
-                      controller: tipoController,
-                      decoration: const InputDecoration(labelText: 'Tipo'),
-                    ),
-                    TextField(
-                      controller: contenidoController,
-                      decoration: const InputDecoration(labelText: 'Contenido'),
-                    ),
-                    TextField(
-                      controller: horaController,
-                      decoration: const InputDecoration(labelText: 'Hora'),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _colorOpcion(Colors.teal, colorSeleccionado, (color) {
-                          setState(() => colorSeleccionado = color);
-                        }),
-                        _colorOpcion(Colors.red, colorSeleccionado, (color) {
-                          setState(() => colorSeleccionado = color);
-                        }),
-                        _colorOpcion(Colors.orange, colorSeleccionado, (color) {
-                          setState(() => colorSeleccionado = color);
-                        }),
-                        _colorOpcion(Colors.blue, colorSeleccionado, (color) {
-                          setState(() => colorSeleccionado = color);
-                        }),
-                        _colorOpcion(Colors.purple, colorSeleccionado, (color) {
-                          setState(() => colorSeleccionado = color);
-                        }),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    ElevatedButton(
-                      onPressed: () {
-                        final tipo = tipoController.text.trim();
-                        final contenido = contenidoController.text.trim();
-                        final hora = horaController.text.trim();
-
-                        if (tipo.isNotEmpty &&
-                            contenido.isNotEmpty &&
-                            _selectedDate != null) {
-                          final nuevaTarea = {
-                            'tipo': tipo,
-                            'contenido': contenido,
-                            'hora': hora.isNotEmpty ? hora : null,
-                            'icono': Icons.circle,
-                            'color': colorSeleccionado,
-                          };
-
-                          setState(() {
-                            final lista = _tareas[_selectedDate!] ?? [];
-                            if (tareaExistente != null) {
-                              final index = lista.indexOf(tareaExistente);
-                              lista[index] = nuevaTarea;
-                            } else {
-                              lista.add(nuevaTarea);
-                            }
-                            _tareas[_selectedDate!] = lista;
-                          });
-
-                          Navigator.pop(context);
-                        }
-                      },
-                      child: Text(
-                        tareaExistente != null ? 'Guardar Cambios' : 'Agregar',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             );
           },
         );
       },
     );
-  }
-
-  Widget _colorOpcion(
-    Color color,
-    Color colorSeleccionado,
-    void Function(Color) onSelected,
-  ) {
-    return GestureDetector(
-      onTap: () => onSelected(color),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color,
-          border: Border.all(
-            color:
-                color == colorSeleccionado ? Colors.black : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        width: 30,
-        height: 30,
-      ),
-    );
-  }
-
-  bool _esMismoDia(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 }

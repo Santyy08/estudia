@@ -1,140 +1,241 @@
+// lib/vista_calendario/vista_mes.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:table_calendar/table_calendar.dart';
+
+import '../providers/calendario_provider.dart';
+import '../widgets/tarjeta_eventos.dart';
+import '../widgets/editar_evento_form.dart';
 
 class VistaMes extends StatefulWidget {
-  final Function(DateTime) onDiaSeleccionado;
-  final DateTime fechaSeleccionada;
-
-  const VistaMes({
-    super.key,
-    required this.onDiaSeleccionado,
-    required this.fechaSeleccionada,
-  });
+  const VistaMes({Key? key}) : super(key: key);
 
   @override
   State<VistaMes> createState() => _VistaMesState();
 }
 
 class _VistaMesState extends State<VistaMes> {
-  late DateTime _mesActual;
+  late final ValueNotifier<List<TarjetaEventos>> _selectedEvents;
+  CalendarFormat _calendarFormat = CalendarFormat.month;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
 
   @override
   void initState() {
     super.initState();
-    _mesActual = DateTime(
-      widget.fechaSeleccionada.year,
-      widget.fechaSeleccionada.month,
+    _selectedDay = context.read<CalendarioProvider>().fechaSeleccionada;
+    _focusedDay =
+        _selectedDay!; // Iniciar focusedDay con la fecha seleccionada del provider
+    _selectedEvents = ValueNotifier(
+      _getEventsForDay(context.read<CalendarioProvider>().fechaSeleccionada),
     );
   }
 
-  void _cambiarMes(int direccion) {
-    setState(() {
-      _mesActual = DateTime(_mesActual.year, _mesActual.month + direccion);
-    });
+  @override
+  void dispose() {
+    _selectedEvents.dispose();
+    super.dispose();
+  }
+
+  List<TarjetaEventos> _getEventsForDay(DateTime day) {
+    return context.read<CalendarioProvider>().eventosDelDia(day);
+  }
+
+  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
+    if (!isSameDay(_selectedDay, selectedDay)) {
+      setState(() {
+        _selectedDay = selectedDay;
+        _focusedDay = focusedDay;
+      });
+      context.read<CalendarioProvider>().cambiarFechaSeleccionada(selectedDay);
+      _selectedEvents.value = _getEventsForDay(selectedDay);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final diasEnMes = DateUtils.getDaysInMonth(
-      _mesActual.year,
-      _mesActual.month,
-    );
-    final primerDia = DateTime(_mesActual.year, _mesActual.month, 1);
-    final primerDiaSemana = (primerDia.weekday) % 7;
-    final totalCeldas = diasEnMes + primerDiaSemana;
+    return Consumer<CalendarioProvider>(
+      builder: (context, calendarioProv, child) {
+        // Sincronizar _selectedDay y _focusedDay con el provider
+        if (!isSameDay(_selectedDay, calendarioProv.fechaSeleccionada)) {
+          _selectedDay = calendarioProv.fechaSeleccionada;
+          _focusedDay = calendarioProv.fechaSeleccionada;
+          _selectedEvents.value = _getEventsForDay(
+            calendarioProv.fechaSeleccionada,
+          );
+        }
 
-    final dias = List.generate(totalCeldas, (index) {
-      if (index < primerDiaSemana) return null;
-      return DateTime(
-        _mesActual.year,
-        _mesActual.month,
-        index - primerDiaSemana + 1,
-      );
-    });
+        return Column(
+          children: [
+            TableCalendar<TarjetaEventos>(
+              firstDay: DateTime.utc(2000, 1, 1),
+              lastDay: DateTime.utc(2030, 12, 31),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+              calendarFormat: _calendarFormat,
+              eventLoader: _getEventsForDay,
+              startingDayOfWeek: StartingDayOfWeek.sunday,
+              daysOfWeekHeight: 20.0, // Altura para los días de la semana
+              rowHeight: 40.0, // Altura de cada fila de días
 
-    return Column(
-      children: [
-        _header(),
-        const SizedBox(height: 12),
-        _diasSemana(),
-        Expanded(
-          child: GridView.builder(
-            padding: EdgeInsets.zero,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-              childAspectRatio: 1,
-            ),
-            itemCount: dias.length,
-            itemBuilder: (context, index) {
-              final dia = dias[index];
-              final esSeleccionado =
-                  dia != null &&
-                  dia.day == widget.fechaSeleccionada.day &&
-                  dia.month == widget.fechaSeleccionada.month &&
-                  dia.year == widget.fechaSeleccionada.year;
-
-              return GestureDetector(
-                onTap: dia != null ? () => widget.onDiaSeleccionado(dia) : null,
-                child: Container(
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color:
-                        esSeleccionado ? Colors.teal[200] : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    dia != null ? '${dia.day}' : '',
-                    style: TextStyle(
-                      color: esSeleccionado ? Colors.white : Colors.black,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+              calendarStyle: CalendarStyle(
+                outsideDaysVisible: false,
+                markerDecoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  shape: BoxShape.circle,
                 ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _header() {
-    final mesNombre = DateFormat.yMMMM('es_ES').format(_mesActual);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        IconButton(
-          onPressed: () => _cambiarMes(-1),
-          icon: const Icon(Icons.chevron_left),
-        ),
-        Text(
-          mesNombre,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        IconButton(
-          onPressed: () => _cambiarMes(1),
-          icon: const Icon(Icons.chevron_right),
-        ),
-      ],
-    );
-  }
-
-  Widget _diasSemana() {
-    const dias = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children:
-          dias.map((dia) {
-            return Expanded(
-              child: Center(
-                child: Text(
-                  dia,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                todayDecoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withOpacity(0.4),
+                  shape: BoxShape.circle,
+                ),
+                selectedDecoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  shape: BoxShape.circle,
+                ),
+                defaultTextStyle: const TextStyle(color: Colors.black87),
+                weekendTextStyle: const TextStyle(color: Colors.black87),
+                todayTextStyle: const TextStyle(color: Colors.white),
+                selectedTextStyle: const TextStyle(color: Colors.white),
+              ),
+              headerStyle: HeaderStyle(
+                titleCentered: true,
+                formatButtonVisible: false,
+                titleTextStyle: Theme.of(
+                  context,
+                ).textTheme.titleLarge!.copyWith(fontWeight: FontWeight.bold),
+                leftWithIcon: const Icon(
+                  Icons.arrow_back_ios,
+                  color: Colors.black54,
+                  size: 20,
+                ),
+                rightWithIcon: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.black54,
+                  size: 20,
+                ),
+                headerPadding: const EdgeInsets.symmetric(vertical: 8.0),
+              ),
+              daysOfWeekStyle: const DaysOfWeekStyle(
+                weekendStyle: TextStyle(
+                  color: Colors.black54,
+                  fontWeight: FontWeight.bold,
+                ),
+                weekdayStyle: TextStyle(
+                  color: Colors.black54,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            );
-          }).toList(),
+              onDaySelected: _onDaySelected,
+              onFormatChanged: (format) {
+                if (_calendarFormat != format) {
+                  setState(() {
+                    _calendarFormat = format;
+                  });
+                }
+              },
+              onPageChanged: (focusedDay) {
+                _focusedDay = focusedDay;
+                // No cambiamos la fecha seleccionada del provider aquí,
+                // solo el mes enfocado en el calendario.
+              },
+            ),
+            const SizedBox(height: 16.0),
+            Expanded(
+              child: ValueListenableBuilder<List<TarjetaEventos>>(
+                valueListenable: _selectedEvents,
+                builder: (context, value, _) {
+                  if (value.isEmpty) {
+                    return Center(
+                      child: Text(
+                        'No hay eventos para el día seleccionado.',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    itemCount: value.length,
+                    itemBuilder: (context, index) {
+                      final evento = value[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
+                        elevation: 3,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: InkWell(
+                          onTap: () {
+                            calendarioProv.abrirFormularioEvento(
+                              context,
+                              evento: evento,
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  radius: 6,
+                                  backgroundColor: evento.color,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        evento.titulo,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        DateFormat('HH:mm', 'es').format(
+                                          evento.fechaInicio,
+                                        ), // Solo la hora
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(color: Colors.grey[700]),
+                                      ),
+                                      if (evento.descripcion.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          evento.descripcion,
+                                          style:
+                                              Theme.of(
+                                                context,
+                                              ).textTheme.bodySmall,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
