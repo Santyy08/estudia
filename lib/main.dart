@@ -51,7 +51,7 @@ class MyApp extends StatelessWidget {
           textButtonTheme: TextButtonThemeData(
             style: TextButton.styleFrom(foregroundColor: Colors.grey[700]),
           ),
-          cardTheme: CardTheme(
+          cardTheme: CardThemeData(
             elevation: 0, // Sin sombra por defecto en cards
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),

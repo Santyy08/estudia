@@ -1,8 +1,11 @@
 // lib/widgets/crear_evento_form.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+// Asegúrate de que Provider esté importado si lo usas aquí directamente
 import 'package:uuid/uuid.dart';
-import '../widgets/tarjeta_eventos.dart';
+// Importa el modelo actualizado y el enum
+import '../widgets/tarjeta_eventos.dart'; // Ya debería estar importando el archivo modificado
+// Para acceder a la lógica del calendario
 
 class CrearEventoForm extends StatefulWidget {
   const CrearEventoForm({Key? key}) : super(key: key);
@@ -21,9 +24,10 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
   late TimeOfDay _horaInicio;
   late DateTime _fechaFin;
   late TimeOfDay _horaFin;
-  Color _colorSeleccionado = Colors.blue.withOpacity(
-    0.2,
-  ); // Color por defecto pastel
+  late bool _esTodoElDia; // Nuevo estado para el checkbox
+  ReglaRepeticion?
+  _reglaRepeticionSeleccionada; // Para guardar la regla de repetición
+  Color _colorSeleccionado = Colors.blue.withOpacity(0.2);
 
   @override
   void initState() {
@@ -31,16 +35,21 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
     _tituloCtrl = TextEditingController();
     _descripcionCtrl = TextEditingController();
     final now = DateTime.now();
-    _fechaInicio = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      now.hour,
-      (now.minute ~/ 5) * 5,
-    ); // Redondea al minuto más cercano múltiplo de 5
-    _horaInicio = TimeOfDay.fromDateTime(_fechaInicio);
-    _fechaFin = _fechaInicio.add(const Duration(hours: 1));
-    _horaFin = TimeOfDay.fromDateTime(_fechaFin);
+    // Inicializa _fechaInicio solo con año, mes y día. La hora se maneja por separado.
+    _fechaInicio = DateTime(now.year, now.month, now.day);
+    _horaInicio = TimeOfDay(
+      hour: now.hour,
+      minute: (now.minute ~/ 15) * 15,
+    ); // Redondea al cuarto de hora más cercano
+
+    // Inicializa _fechaFin igual que _fechaInicio y _horaFin una hora después.
+    _fechaFin = DateTime(now.year, now.month, now.day);
+    _horaFin = TimeOfDay(
+      hour: _horaInicio.hour + 1,
+      minute: _horaInicio.minute,
+    );
+
+    _esTodoElDia = false; // Por defecto, no es todo el día
   }
 
   @override
@@ -50,82 +59,96 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
     super.dispose();
   }
 
-  Future<void> _seleccionarFechaInicio() async {
-    final picked = await showDatePicker(
+  Future<void> _seleccionarFecha(
+    BuildContext context,
+    bool esFechaInicio,
+  ) async {
+    final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _fechaInicio,
+      initialDate: esFechaInicio ? _fechaInicio : _fechaFin,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
-      locale: const Locale('es', ''), // Forzar español para DatePicker
+      locale: const Locale('es', ''),
     );
     if (picked != null) {
       setState(() {
-        _fechaInicio = picked;
-        // Si la fecha de fin es anterior a la de inicio, ajustarla
-        if (_fechaFin.isBefore(_fechaInicio)) {
-          _fechaFin = _fechaInicio;
+        if (esFechaInicio) {
+          _fechaInicio = picked;
+          // Si la fecha de fin es anterior a la de inicio, ajustarla
+          if (_combinarFechaYHora(
+            _fechaFin,
+            _horaFin,
+          ).isBefore(_combinarFechaYHora(_fechaInicio, _horaInicio))) {
+            _fechaFin = picked; // Ajusta también la fecha de fin
+            // Podrías también ajustar la hora de fin si quieres mantener la duración
+          }
+        } else {
+          // Asegurarse que la fecha de fin no sea anterior a la de inicio
+          if (picked.isBefore(_fechaInicio)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'La fecha de fin no puede ser anterior a la fecha de inicio.',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          } else {
+            _fechaFin = picked;
+          }
         }
       });
     }
   }
 
-  Future<void> _seleccionarHoraInicio() async {
-    final picked = await showTimePicker(
+  Future<void> _seleccionarHora(BuildContext context, bool esHoraInicio) async {
+    final TimeOfDay? picked = await showTimePicker(
       context: context,
-      initialTime: _horaInicio,
+      initialTime: esHoraInicio ? _horaInicio : _horaFin,
       builder: (BuildContext context, Widget? child) {
         return MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(alwaysUse24HourFormat: true), // Formato 24 horas
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
           child: child!,
         );
       },
     );
     if (picked != null) {
       setState(() {
-        _horaInicio = picked;
+        if (esHoraInicio) {
+          _horaInicio = picked;
+          // Ajustar hora de fin si es necesario para mantener al menos la misma hora o una hora después
+          final inicioDT = _combinarFechaYHora(_fechaInicio, _horaInicio);
+          final finDT = _combinarFechaYHora(_fechaFin, _horaFin);
+          if (finDT.isBefore(inicioDT) || finDT.isAtSameMomentAs(inicioDT)) {
+            _horaFin = TimeOfDay(
+              hour: _horaInicio.hour + 1,
+              minute: _horaInicio.minute,
+            );
+            // Si la fecha de fin también era anterior, ajustarla
+            if (_fechaFin.isBefore(_fechaInicio)) {
+              _fechaFin = _fechaInicio;
+            } else if (_fechaFin.isAtSameMomentAs(_fechaInicio) &&
+                _horaFin.hour < _horaInicio.hour) {
+              _horaFin = TimeOfDay(
+                hour: _horaInicio.hour + 1,
+                minute: _horaInicio.minute,
+              );
+            }
+          }
+        } else {
+          _horaFin = picked;
+        }
       });
     }
   }
 
-  Future<void> _seleccionarFechaFin() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _fechaFin,
-      firstDate:
-          _fechaInicio, // No permitir fecha de fin anterior a la de inicio
-      lastDate: DateTime(2100),
-      locale: const Locale('es', ''), // Forzar español para DatePicker
-    );
-    if (picked != null) {
-      setState(() {
-        _fechaFin = picked;
-      });
-    }
-  }
-
-  Future<void> _seleccionarHoraFin() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _horaFin,
-      builder: (BuildContext context, Widget? child) {
-        return MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(alwaysUse24HourFormat: true), // Formato 24 horas
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        _horaFin = picked;
-      });
-    }
+  // Helper para combinar fecha (DateTime) y hora (TimeOfDay) en un solo DateTime
+  DateTime _combinarFechaYHora(DateTime fecha, TimeOfDay hora) {
+    return DateTime(fecha.year, fecha.month, fecha.day, hora.hour, hora.minute);
   }
 
   void _seleccionarColor() {
+    // Código para seleccionar color (igual que antes, puedes mantenerlo)
     showDialog<Color>(
       context: context,
       builder:
@@ -190,8 +213,21 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
     });
   }
 
+  // --- Aquí iría la UI para seleccionar la repetición (lo haremos después) ---
+  void _gestionarRepeticion() {
+    // TODO: Mostrar un diálogo o una nueva pantalla para configurar _reglaRepeticionSeleccionada
+    // Por ahora, solo un placeholder:
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Configuración de repetición (pendiente)')),
+    );
+  }
+  // --- Fin placeholder repetición ---
+
   @override
   Widget build(BuildContext context) {
+    // Para formatear la fecha y hora en los botones
+    final formatoFecha = DateFormat('dd/MM/yyyy', 'es');
+
     return Padding(
       padding: EdgeInsets.only(
         top: 16,
@@ -204,14 +240,17 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
           key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Nuevo Evento',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
+              Center(
+                child: Text(
+                  'Nuevo Evento',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               TextFormField(
                 controller: _tituloCtrl,
                 decoration: const InputDecoration(
@@ -220,9 +259,8 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                   prefixIcon: Icon(Icons.title),
                 ),
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
+                  if (value == null || value.trim().isEmpty)
                     return 'El título es obligatorio';
-                  }
                   return null;
                 },
               ),
@@ -236,49 +274,92 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                   prefixIcon: Icon(Icons.description),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+
+              // Selector de Fecha y Hora de Inicio
+              Text("Desde", style: Theme.of(context).textTheme.titleSmall),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      icon: const Icon(Icons.calendar_today),
-                      label: Text(
-                        DateFormat('dd/MM/yyyy').format(_fechaInicio),
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      label: Text(formatoFecha.format(_fechaInicio)),
+                      onPressed: () => _seleccionarFecha(context, true),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (!_esTodoElDia) // Solo mostrar hora si no es "Todo el día"
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.access_time, size: 18),
+                        label: Text(_horaInicio.format(context)),
+                        onPressed: () => _seleccionarHora(context, true),
                       ),
-                      onPressed: _seleccionarFechaInicio,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.access_time),
-                      label: Text(_horaInicio.format(context)),
-                      onPressed: _seleccionarHoraInicio,
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 12),
+
+              // Selector de Fecha y Hora de Fin
+              Text("Hasta", style: Theme.of(context).textTheme.titleSmall),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      icon: const Icon(Icons.calendar_today_outlined),
-                      label: Text(DateFormat('dd/MM/yyyy').format(_fechaFin)),
-                      onPressed: _seleccionarFechaFin,
+                      icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                      label: Text(formatoFecha.format(_fechaFin)),
+                      onPressed: () => _seleccionarFecha(context, false),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.access_time),
-                      label: Text(_horaFin.format(context)),
-                      onPressed: _seleccionarHoraFin,
+                  if (!_esTodoElDia) // Solo mostrar hora si no es "Todo el día"
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.access_time_outlined, size: 18),
+                        label: Text(_horaFin.format(context)),
+                        onPressed: () => _seleccionarHora(context, false),
+                      ),
                     ),
-                  ),
                 ],
               ),
               const SizedBox(height: 12),
+
+              // Checkbox para "Todo el día"
+              Row(
+                children: [
+                  Checkbox(
+                    value: _esTodoElDia,
+                    onChanged: (bool? value) {
+                      setState(() {
+                        _esTodoElDia = value ?? false;
+                        if (_esTodoElDia) {
+                          // Si es todo el día, las horas podrían ser 00:00 a 23:59 lógicamente
+                          // o simplemente ignorarse al guardar el evento.
+                          // Por ahora, solo actualizamos el estado.
+                        }
+                      });
+                    },
+                  ),
+                  const Text('Todo el día'),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Botón para gestionar repetición (funcionalidad futura)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.repeat),
+                title: Text(
+                  _reglaRepeticionSeleccionada == null
+                      ? 'No se repite'
+                      : 'Se repite (detalle pendiente)', // TODO: Mostrar resumen de la regla
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: _gestionarRepeticion,
+                dense: true,
+              ),
+              const SizedBox(height: 12),
+
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.color_lens),
@@ -290,8 +371,9 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                     radius: 15,
                   ),
                 ),
+                dense: true,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               ElevatedButton.icon(
                 icon: const Icon(Icons.save),
                 label: const Text('Guardar'),
@@ -300,20 +382,48 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                 ),
                 onPressed: () {
                   if (_formKey.currentState?.validate() ?? false) {
-                    final fechaInicioCompleta = DateTime(
-                      _fechaInicio.year,
-                      _fechaInicio.month,
-                      _fechaInicio.day,
-                      _horaInicio.hour,
-                      _horaInicio.minute,
-                    );
-                    final fechaFinCompleta = DateTime(
-                      _fechaFin.year,
-                      _fechaFin.month,
-                      _fechaFin.day,
-                      _horaFin.hour,
-                      _horaFin.minute,
-                    );
+                    // Combinar fechas y horas para obtener los DateTime completos
+                    DateTime fechaInicioCompleta;
+                    DateTime fechaFinCompleta;
+
+                    if (_esTodoElDia) {
+                      fechaInicioCompleta = DateTime(
+                        _fechaInicio.year,
+                        _fechaInicio.month,
+                        _fechaInicio.day,
+                        0,
+                        0,
+                        0,
+                      ); // Inicio del día
+                      fechaFinCompleta = DateTime(
+                        _fechaFin.year,
+                        _fechaFin.month,
+                        _fechaFin.day,
+                        23,
+                        59,
+                        59,
+                      ); // Fin del día
+                      // Asegurarse que fechaFin no sea anterior a fechaInicio si es todo el día y dura varios días
+                      if (fechaFinCompleta.isBefore(fechaInicioCompleta)) {
+                        fechaFinCompleta = DateTime(
+                          fechaInicioCompleta.year,
+                          fechaInicioCompleta.month,
+                          fechaInicioCompleta.day,
+                          23,
+                          59,
+                          59,
+                        );
+                      }
+                    } else {
+                      fechaInicioCompleta = _combinarFechaYHora(
+                        _fechaInicio,
+                        _horaInicio,
+                      );
+                      fechaFinCompleta = _combinarFechaYHora(
+                        _fechaFin,
+                        _horaFin,
+                      );
+                    }
 
                     if (fechaFinCompleta.isBefore(fechaInicioCompleta)) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -333,8 +443,12 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                       descripcion: _descripcionCtrl.text.trim(),
                       fechaInicio: fechaInicioCompleta,
                       fechaFin: fechaFinCompleta,
+                      esTodoElDia: _esTodoElDia, // Guardar el nuevo campo
                       color: _colorSeleccionado,
+                      reglaRepeticion:
+                          _reglaRepeticionSeleccionada, // Guardar la regla
                     );
+                    // Devolver el evento al CalendarioProvider a través de Navigator.pop
                     Navigator.of(context).pop(nuevoEvento);
                   }
                 },

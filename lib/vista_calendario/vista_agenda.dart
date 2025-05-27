@@ -4,29 +4,35 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/calendario_provider.dart';
-import '../widgets/tarjeta_eventos.dart';
-import '../widgets/editar_evento_form.dart';
+import '../widgets/tarjeta_eventos.dart'; // Para el tipo de datos TarjetaEventos
 
 class VistaAgenda extends StatelessWidget {
   const VistaAgenda({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    Intl.defaultLocale = 'es_ES';
+
     return Consumer<CalendarioProvider>(
       builder: (context, calendarioProv, child) {
-        final eventosFuturos = calendarioProv.eventosFiltrados();
+        // Usar el método del provider que ya genera las ocurrencias para la agenda
+        final eventosParaAgenda = calendarioProv.eventosParaAgenda();
 
-        if (eventosFuturos.isEmpty) {
+        if (eventosParaAgenda.isEmpty) {
           return Center(
             child: Text(
               'No hay eventos futuros en tu agenda.',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: Colors.grey[600]),
             ),
           );
         }
 
+        // Agrupar eventos por día para la visualización de la agenda
         final Map<DateTime, List<TarjetaEventos>> eventosAgrupados = {};
-        for (var evento in eventosFuturos) {
+        for (var evento in eventosParaAgenda) {
+          // Normalizar a solo fecha para agrupar correctamente
           final fechaSinHora = DateTime(
             evento.fechaInicio.year,
             evento.fechaInicio.month,
@@ -38,48 +44,52 @@ class VistaAgenda extends StatelessWidget {
           eventosAgrupados[fechaSinHora]!.add(evento);
         }
 
+        // Ordenar las fechas de los grupos
         final fechasOrdenadas =
             eventosAgrupados.keys.toList()..sort((a, b) => a.compareTo(b));
 
         return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
           itemCount: fechasOrdenadas.length,
           itemBuilder: (context, sectionIndex) {
-            final fecha = fechasOrdenadas[sectionIndex];
-            final eventosDelDia =
-                eventosAgrupados[fecha]!
-                  ..sort((a, b) => a.fechaInicio.compareTo(b.fechaInicio));
+            final fechaGrupo = fechasOrdenadas[sectionIndex];
+            final eventosDelDiaAgrupado = eventosAgrupados[fechaGrupo]!;
+            // Los eventos ya vienen ordenados por hora desde el provider si se hizo bien en `eventosParaAgenda`
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                   child: Text(
+                    // Formato de fecha para la cabecera de cada día
                     DateFormat(
                       'EEEE, dd \'de\' MMMM \'de\' yyyy',
                       'es',
-                    ).format(fecha),
+                    ).format(fechaGrupo),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Theme.of(context).primaryColor,
+                      color:
+                          Theme.of(
+                            context,
+                          ).primaryColorDark, // Un color distintivo para la fecha
                     ),
                   ),
                 ),
                 ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: eventosDelDia.length,
+                  shrinkWrap:
+                      true, // Importante para ListView dentro de Column/ListView
+                  physics:
+                      const NeverScrollableScrollPhysics(), // Deshabilitar scroll individual
+                  itemCount: eventosDelDiaAgrupado.length,
                   itemBuilder: (context, eventIndex) {
-                    final evento = eventosDelDia[eventIndex];
+                    final evento = eventosDelDiaAgrupado[eventIndex];
                     return Card(
                       margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
+                        horizontal: 12,
                         vertical: 4,
                       ),
-                      elevation: 2,
+                      elevation: 1.5,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -92,54 +102,71 @@ class VistaAgenda extends StatelessWidget {
                         },
                         borderRadius: BorderRadius.circular(10),
                         child: Padding(
-                          padding: const EdgeInsets.all(12.0),
+                          padding: const EdgeInsets.all(10.0),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                                CrossAxisAlignment
+                                    .center, // Centrar verticalmente
                             children: [
                               Container(
-                                width: 6,
-                                height: 40,
+                                width: 6, // Ancho de la barra de color
+                                height:
+                                    evento.esTodoElDia
+                                        ? 20
+                                        : 35, // Altura de la barra
                                 decoration: BoxDecoration(
                                   color: evento.color,
                                   borderRadius: BorderRadius.circular(3),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
                                       evento.titulo,
                                       style: Theme.of(
                                         context,
-                                      ).textTheme.bodyLarge?.copyWith(
+                                      ).textTheme.titleSmall?.copyWith(
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
+                                    const SizedBox(height: 2),
                                     Text(
-                                      '${DateFormat('HH:mm', 'es').format(evento.fechaInicio)} - ${DateFormat('HH:mm', 'es').format(evento.fechaFin)}',
-                                      style:
-                                          Theme.of(context).textTheme.bodySmall,
+                                      evento.esTodoElDia
+                                          ? 'Todo el día'
+                                          : '${DateFormat('HH:mm').format(evento.fechaInicio)} - ${DateFormat('HH:mm').format(evento.fechaFin)}',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall?.copyWith(
+                                        color: Colors.grey[600],
+                                        fontSize: 11,
+                                      ),
                                     ),
-                                    if (evento.descripcion.isNotEmpty)
+                                    if (evento.descripcion.isNotEmpty &&
+                                        !evento.esTodoElDia) ...[
+                                      // No mostrar desc en "todo el dia" para ahorrar espacio
+                                      const SizedBox(height: 3),
                                       Text(
                                         evento.descripcion,
-                                        style:
-                                            Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall,
-                                        maxLines: 2,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(fontSize: 11),
+                                        maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
+                                    ],
                                     if (evento.etiquetas.isNotEmpty)
                                       Padding(
                                         padding: const EdgeInsets.only(
                                           top: 4.0,
                                         ),
                                         child: Wrap(
-                                          spacing: 6.0,
-                                          runSpacing: 0.0,
+                                          spacing: 4.0,
+                                          runSpacing: 2.0,
                                           children:
                                               evento.etiquetas
                                                   .map(
@@ -147,14 +174,23 @@ class VistaAgenda extends StatelessWidget {
                                                       label: Text(
                                                         tag,
                                                         style: const TextStyle(
-                                                          fontSize: 10,
+                                                          fontSize: 9,
                                                         ),
                                                       ),
+                                                      labelPadding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 3,
+                                                            vertical: 0,
+                                                          ),
                                                       visualDensity:
                                                           VisualDensity.compact,
                                                       materialTapTargetSize:
                                                           MaterialTapTargetSize
                                                               .shrinkWrap,
+                                                      padding: EdgeInsets.zero,
+                                                      backgroundColor: evento
+                                                          .color
+                                                          .withOpacity(0.1),
                                                     ),
                                                   )
                                                   .toList(),
@@ -170,6 +206,8 @@ class VistaAgenda extends StatelessWidget {
                     );
                   },
                 ),
+                if (sectionIndex < fechasOrdenadas.length - 1)
+                  const Divider(height: 16, indent: 16, endIndent: 16),
               ],
             );
           },
