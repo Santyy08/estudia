@@ -37,6 +37,7 @@ dependencies:
   uuid: ^4.5.1
   shared_preferences: ^2.0.15
   firebase_core: ^3.13.1
+  flutter_local_notifications: ^19.2.1
   firebase_analytics: ^11.4.6
   firebase_auth: ^5.5.4 # La versión podría ser más nueva
   cloud_firestore: ^5.0.0 # La versión podría ser más nueva
@@ -109,3 +110,6 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+  assets:
+    - android/build.gradle.kts
+

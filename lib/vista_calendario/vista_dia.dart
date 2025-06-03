@@ -8,7 +8,7 @@ import '../providers/calendario_provider.dart';
 // No es necesario importar EditarEventoForm aquí, ya que se maneja a través del provider
 
 class VistaDia extends StatelessWidget {
-  const VistaDia({Key? key}) : super(key: key);
+  const VistaDia({super.key});
 
   @override
   Widget build(BuildContext context) {

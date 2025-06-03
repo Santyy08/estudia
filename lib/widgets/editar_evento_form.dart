@@ -1,4 +1,6 @@
 // lib/widgets/editar_evento_form.dart
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -6,11 +8,12 @@ import 'package:provider/provider.dart';
 // Importa el modelo actualizado y el enum
 import '../widgets/tarjeta_eventos.dart';
 import '../providers/calendario_provider.dart';
+import 'dialogo_configurar_repeticion.dart';
 
 class EditarEventoForm extends StatefulWidget {
   final TarjetaEventos evento;
 
-  const EditarEventoForm({Key? key, required this.evento}) : super(key: key);
+  const EditarEventoForm({super.key, required this.evento});
 
   @override
   State<EditarEventoForm> createState() => _EditarEventoFormState();
@@ -321,8 +324,8 @@ class _EditarEventoFormState extends State<EditarEventoForm> {
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Eliminar'),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('Eliminar'),
               ),
             ],
           ),
@@ -383,8 +386,9 @@ class _EditarEventoFormState extends State<EditarEventoForm> {
                       prefixIcon: Icon(Icons.title),
                     ),
                     validator: (valor) {
-                      if (valor == null || valor.trim().isEmpty)
+                      if (valor == null || valor.trim().isEmpty) {
                         return 'El título es obligatorio';
+                      }
                       return null;
                     },
                   ),

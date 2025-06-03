@@ -153,6 +153,3 @@ class TarjetaEventos {
     );
   }
 }
-
-// Necesario para que copyWith pueda manejar 'null' correctamente para reglaRepeticion
-typedef ValueGetter<T> = T Function();

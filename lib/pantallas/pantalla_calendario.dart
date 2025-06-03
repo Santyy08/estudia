@@ -13,7 +13,7 @@ import '../providers/calendario_provider.dart';
 // ya que CalendarioProvider maneja la apertura de los formularios.
 
 class PantallaCalendario extends StatelessWidget {
-  const PantallaCalendario({Key? key}) : super(key: key);
+  const PantallaCalendario({super.key});
 
   String _obtenerTituloAppBar(
     BuildContext

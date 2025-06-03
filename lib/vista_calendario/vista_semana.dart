@@ -8,7 +8,7 @@ import '../widgets/tarjeta_eventos.dart';
 // No es necesario importar EditarEventoForm aquí
 
 class VistaSemana extends StatelessWidget {
-  const VistaSemana({Key? key}) : super(key: key);
+  const VistaSemana({super.key});
 
   // Define las horas que se mostrarán en la cuadrícula
   final List<int> _horasDelDia = const [
@@ -116,23 +116,21 @@ class VistaSemana extends StatelessWidget {
       child: Column(
         children: [
           SizedBox(height: 30), // Espacio para la cabecera de los días
-          ..._horasDelDia
-              .map(
-                (hour) => Container(
-                  height: _alturaHora,
-                  alignment: Alignment.center,
-                  child: Text(
-                    DateFormat(
-                      'HH:mm',
-                    ).format(DateTime(0, 0, 0, hour, 0)), // Formato '08:00'
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 10,
-                      color: Colors.grey[700],
-                    ),
-                  ),
+          ..._horasDelDia.map(
+            (hour) => Container(
+              height: _alturaHora,
+              alignment: Alignment.center,
+              child: Text(
+                DateFormat(
+                  'HH:mm',
+                ).format(DateTime(0, 0, 0, hour, 0)), // Formato '08:00'
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 10,
+                  color: Colors.grey[700],
                 ),
-              )
-              .toList(),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -191,16 +189,14 @@ class VistaSemana extends StatelessWidget {
           ),
         ),
         // Líneas Horizontales de la Grilla (para cada hora)
-        ..._horasDelDia
-            .map(
-              (_) => Container(
-                height: _alturaHora,
-                decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-                ),
-              ),
-            )
-            .toList(),
+        ..._horasDelDia.map(
+          (_) => Container(
+            height: _alturaHora,
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+            ),
+          ),
+        ),
         // Líneas Verticales (entre días) - Se dibujan como parte del Stack o dentro de cada columna del día
         // Esto se maneja mejor con el posicionamiento de los eventos o un CustomPainter si es muy complejo
       ],
@@ -243,11 +239,13 @@ class VistaSemana extends StatelessWidget {
           evento.fechaFin.hour + (evento.fechaFin.minute / 60.0);
 
       // Si el evento empieza antes de la primera hora visible, ajustarlo
-      if (horaInicioEvento < _horasDelDia.first)
+      if (horaInicioEvento < _horasDelDia.first) {
         horaInicioEvento = _horasDelDia.first.toDouble();
+      }
       // Si el evento termina después de la última hora visible + 1 (para que ocupe hasta el final del slot), ajustarlo
-      if (horaFinEvento > _horasDelDia.last + 1)
+      if (horaFinEvento > _horasDelDia.last + 1) {
         horaFinEvento = (_horasDelDia.last + 1).toDouble();
+      }
 
       double top = (horaInicioEvento - _horasDelDia.first) * _alturaHora;
       double height = (horaFinEvento - horaInicioEvento) * _alturaHora;
@@ -260,11 +258,13 @@ class VistaSemana extends StatelessWidget {
       // O si dura más, se muestra cortado o necesita una lógica más avanzada.
 
       int diaIndex = evento.fechaInicio.difference(inicioVisibleSemana).inDays;
-      if (diaIndex < 0 || diaIndex > 6)
+      if (diaIndex < 0 || diaIndex > 6) {
         return const SizedBox.shrink(); // Fuera de la semana
+      }
 
-      if (height <= 0)
+      if (height <= 0) {
         return const SizedBox.shrink(); // Evento sin duración visible
+      }
 
       return Positioned(
         top: top + 30, // +30 para compensar la cabecera de los días
@@ -340,22 +340,25 @@ class VistaSemana extends StatelessWidget {
           // Añadimos el evento original, la UI decidirá cómo mostrarlo (ej. solo el título)
           eventosPorDia[diaIndex]!.add(evento);
         }
-        if (diaActual == diaFinEvento)
+        if (diaActual == diaFinEvento) {
           break; // Evitar bucle infinito si fechaInicio y fechaFin son iguales (aunque esTodoElDia)
+        }
         diaActual = diaActual.add(const Duration(days: 1));
       }
     }
 
     // Determinar cuántas "filas" de eventos de todo el día necesitamos como máximo por día
     int maxFilas = 0;
-    eventosPorDia.values.forEach((list) {
+    for (var list in eventosPorDia.values) {
       if (list.length > maxFilas) maxFilas = list.length;
-    });
-    if (maxFilas == 0 && eventos.isNotEmpty)
+    }
+    if (maxFilas == 0 && eventos.isNotEmpty) {
       maxFilas = 1; // Al menos una fila si hay algún evento
-    if (maxFilas > 2)
+    }
+    if (maxFilas > 2) {
       maxFilas =
           2; // Limitar a 2 filas para no ocupar mucho espacio, luego un "+X más"
+    }
 
     if (maxFilas == 0) return const SizedBox.shrink();
 

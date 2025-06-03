@@ -8,7 +8,7 @@ final ThemeData temaClaro = ThemeData(
     primary: Constantes.colorPrimario,
     secondary: Constantes.colorSecundario,
     error: Constantes.colorError,
-    background: Constantes.colorFondo,
+    surface: Constantes.colorFondo,
   ),
   scaffoldBackgroundColor: Constantes.colorFondo,
   appBarTheme: AppBarTheme(
@@ -45,7 +45,7 @@ final ThemeData temaOscuro = ThemeData(
     primary: Constantes.colorSecundario,
     secondary: Constantes.colorPrimario,
     error: Constantes.colorError,
-    background: Colors.black87,
+    surface: Colors.black87,
   ),
   scaffoldBackgroundColor: Colors.black87,
   appBarTheme: AppBarTheme(

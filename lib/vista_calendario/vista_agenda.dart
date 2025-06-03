@@ -7,7 +7,7 @@ import '../providers/calendario_provider.dart';
 import '../widgets/tarjeta_eventos.dart'; // Para el tipo de datos TarjetaEventos
 
 class VistaAgenda extends StatelessWidget {
-  const VistaAgenda({Key? key}) : super(key: key);
+  const VistaAgenda({super.key});
 
   @override
   Widget build(BuildContext context) {

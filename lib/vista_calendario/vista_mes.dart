@@ -9,7 +9,7 @@ import '../widgets/tarjeta_eventos.dart';
 // No es necesario importar EditarEventoForm aquí
 
 class VistaMes extends StatefulWidget {
-  const VistaMes({Key? key}) : super(key: key);
+  const VistaMes({super.key});
 
   @override
   State<VistaMes> createState() => _VistaMesState();
@@ -18,7 +18,7 @@ class VistaMes extends StatefulWidget {
 class _VistaMesState extends State<VistaMes> {
   // El ValueNotifier para los eventos seleccionados se actualiza cuando cambia el día
   late final ValueNotifier<List<TarjetaEventos>> _selectedEvents;
-  CalendarFormat _calendarFormat =
+  final CalendarFormat _calendarFormat =
       CalendarFormat.month; // Por defecto, vista mensual
 
   // _focusedDay se usa para controlar qué mes se muestra en TableCalendar

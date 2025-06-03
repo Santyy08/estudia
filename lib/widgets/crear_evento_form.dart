@@ -1,14 +1,20 @@
 // lib/widgets/crear_evento_form.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-// Asegúrate de que Provider esté importado si lo usas aquí directamente
 import 'package:uuid/uuid.dart';
-// Importa el modelo actualizado y el enum
-import '../widgets/tarjeta_eventos.dart'; // Ya debería estar importando el archivo modificado
-// Para acceder a la lógica del calendario
+
+import 'tarjeta_eventos.dart'; // Para TarjetaEventos, TipoFrecuenciaRepeticion, ReglaRepeticion
+import 'dialogo_configurar_repeticion.dart'; // Importa el diálogo que creamos
+
+// Provider no se importa aquí si la interacción con él se maneja al hacer pop del formulario.
+// import 'package:provider/provider.dart';
+// import '../providers/calendario_provider.dart';
 
 class CrearEventoForm extends StatefulWidget {
-  const CrearEventoForm({Key? key}) : super(key: key);
+  final DateTime?
+  fechaInicialSeleccionada; // Opcional: para pre-rellenar la fecha
+
+  const CrearEventoForm({super.key, this.fechaInicialSeleccionada});
 
   @override
   State<CrearEventoForm> createState() => _CrearEventoFormState();
@@ -24,32 +30,37 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
   late TimeOfDay _horaInicio;
   late DateTime _fechaFin;
   late TimeOfDay _horaFin;
-  late bool _esTodoElDia; // Nuevo estado para el checkbox
-  ReglaRepeticion?
-  _reglaRepeticionSeleccionada; // Para guardar la regla de repetición
+  late bool _esTodoElDia;
+  ReglaRepeticion? _reglaRepeticionSeleccionada;
   Color _colorSeleccionado = Colors.blue.withOpacity(0.2);
 
   @override
   void initState() {
     super.initState();
+    Intl.defaultLocale = 'es_ES'; // Asegurar locale para DateFormat
     _tituloCtrl = TextEditingController();
     _descripcionCtrl = TextEditingController();
-    final now = DateTime.now();
-    // Inicializa _fechaInicio solo con año, mes y día. La hora se maneja por separado.
-    _fechaInicio = DateTime(now.year, now.month, now.day);
+
+    final DateTime fechaBase =
+        widget.fechaInicialSeleccionada ?? DateTime.now();
+    final now =
+        DateTime.now(); // Para la hora actual si no se pasa fecha inicial
+
+    _fechaInicio = DateTime(fechaBase.year, fechaBase.month, fechaBase.day);
     _horaInicio = TimeOfDay(
       hour: now.hour,
       minute: (now.minute ~/ 15) * 15,
-    ); // Redondea al cuarto de hora más cercano
+    ); // Hora actual redondeada
 
-    // Inicializa _fechaFin igual que _fechaInicio y _horaFin una hora después.
-    _fechaFin = DateTime(now.year, now.month, now.day);
+    // Si se pasó una fecha inicial, la hora de fin podría ser una hora después
+    // Si no, la fecha de fin es la misma que la de inicio (hoy)
+    _fechaFin = DateTime(fechaBase.year, fechaBase.month, fechaBase.day);
     _horaFin = TimeOfDay(
       hour: _horaInicio.hour + 1,
       minute: _horaInicio.minute,
     );
 
-    _esTodoElDia = false; // Por defecto, no es todo el día
+    _esTodoElDia = false;
   }
 
   @override
@@ -59,6 +70,10 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
     super.dispose();
   }
 
+  DateTime _combinarFechaYHora(DateTime fecha, TimeOfDay hora) {
+    return DateTime(fecha.year, fecha.month, fecha.day, hora.hour, hora.minute);
+  }
+
   Future<void> _seleccionarFecha(
     BuildContext context,
     bool esFechaInicio,
@@ -66,7 +81,7 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: esFechaInicio ? _fechaInicio : _fechaFin,
-      firstDate: DateTime(2000),
+      firstDate: esFechaInicio ? DateTime(2000) : _fechaInicio,
       lastDate: DateTime(2100),
       locale: const Locale('es', ''),
     );
@@ -74,16 +89,21 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
       setState(() {
         if (esFechaInicio) {
           _fechaInicio = picked;
-          // Si la fecha de fin es anterior a la de inicio, ajustarla
           if (_combinarFechaYHora(
             _fechaFin,
             _horaFin,
           ).isBefore(_combinarFechaYHora(_fechaInicio, _horaInicio))) {
-            _fechaFin = picked; // Ajusta también la fecha de fin
-            // Podrías también ajustar la hora de fin si quieres mantener la duración
+            _fechaFin = picked;
+            if (_horaFin.hour < _horaInicio.hour ||
+                (_horaFin.hour == _horaInicio.hour &&
+                    _horaFin.minute < _horaInicio.minute)) {
+              _horaFin = TimeOfDay(
+                hour: _horaInicio.hour + 1,
+                minute: _horaInicio.minute,
+              );
+            }
           }
         } else {
-          // Asegurarse que la fecha de fin no sea anterior a la de inicio
           if (picked.isBefore(_fechaInicio)) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -116,7 +136,6 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
       setState(() {
         if (esHoraInicio) {
           _horaInicio = picked;
-          // Ajustar hora de fin si es necesario para mantener al menos la misma hora o una hora después
           final inicioDT = _combinarFechaYHora(_fechaInicio, _horaInicio);
           final finDT = _combinarFechaYHora(_fechaFin, _horaFin);
           if (finDT.isBefore(inicioDT) || finDT.isAtSameMomentAs(inicioDT)) {
@@ -124,11 +143,12 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
               hour: _horaInicio.hour + 1,
               minute: _horaInicio.minute,
             );
-            // Si la fecha de fin también era anterior, ajustarla
             if (_fechaFin.isBefore(_fechaInicio)) {
               _fechaFin = _fechaInicio;
             } else if (_fechaFin.isAtSameMomentAs(_fechaInicio) &&
-                _horaFin.hour < _horaInicio.hour) {
+                (_horaFin.hour < _horaInicio.hour ||
+                    (_horaFin.hour == _horaInicio.hour &&
+                        _horaFin.minute <= _horaInicio.minute))) {
               _horaFin = TimeOfDay(
                 hour: _horaInicio.hour + 1,
                 minute: _horaInicio.minute,
@@ -136,19 +156,27 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
             }
           }
         } else {
-          _horaFin = picked;
+          final inicioDT = _combinarFechaYHora(_fechaInicio, _horaInicio);
+          final nuevaFinDT = _combinarFechaYHora(_fechaFin, picked);
+          if (nuevaFinDT.isBefore(inicioDT) ||
+              nuevaFinDT.isAtSameMomentAs(inicioDT)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'La hora de fin debe ser posterior a la hora de inicio.',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          } else {
+            _horaFin = picked;
+          }
         }
       });
     }
   }
 
-  // Helper para combinar fecha (DateTime) y hora (TimeOfDay) en un solo DateTime
-  DateTime _combinarFechaYHora(DateTime fecha, TimeOfDay hora) {
-    return DateTime(fecha.year, fecha.month, fecha.day, hora.hour, hora.minute);
-  }
-
   void _seleccionarColor() {
-    // Código para seleccionar color (igual que antes, puedes mantenerlo)
     showDialog<Color>(
       context: context,
       builder:
@@ -213,19 +241,81 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
     });
   }
 
-  // --- Aquí iría la UI para seleccionar la repetición (lo haremos después) ---
-  void _gestionarRepeticion() {
-    // TODO: Mostrar un diálogo o una nueva pantalla para configurar _reglaRepeticionSeleccionada
-    // Por ahora, solo un placeholder:
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Configuración de repetición (pendiente)')),
-    );
+  String _obtenerTextoResumenRepeticion() {
+    if (_reglaRepeticionSeleccionada == null) {
+      return 'No se repite';
+    }
+    final regla = _reglaRepeticionSeleccionada!;
+    String texto = '';
+    switch (regla.frecuencia) {
+      case TipoFrecuenciaRepeticion.diaria:
+        texto =
+            regla.intervalo == 1
+                ? 'Diariamente'
+                : 'Cada ${regla.intervalo} días';
+        break;
+      case TipoFrecuenciaRepeticion.semanal:
+        texto =
+            regla.intervalo == 1
+                ? 'Semanalmente'
+                : 'Cada ${regla.intervalo} semanas';
+        if (regla.diasSemana != null && regla.diasSemana!.isNotEmpty) {
+          const nombresDias = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+          final dias = regla.diasSemana!
+              .map((d) {
+                if (d >= DateTime.monday && d <= DateTime.sunday) {
+                  return nombresDias[d - 1];
+                }
+                return '';
+              })
+              .where((s) => s.isNotEmpty)
+              .join(', ');
+          if (dias.isNotEmpty) texto += ' los $dias';
+        }
+        break;
+      case TipoFrecuenciaRepeticion.mensual:
+        texto =
+            regla.intervalo == 1
+                ? 'Mensualmente'
+                : 'Cada ${regla.intervalo} meses';
+        if (regla.diaDelMes != null) {
+          texto += ' el día ${regla.diaDelMes}';
+        }
+        break;
+      case TipoFrecuenciaRepeticion.anual:
+        texto =
+            regla.intervalo == 1
+                ? 'Anualmente'
+                : 'Cada ${regla.intervalo} años';
+        break;
+    }
+    if (regla.fechaFinRepeticion != null) {
+      texto +=
+          ' hasta ${DateFormat('dd/MM/yyyy', 'es').format(regla.fechaFinRepeticion!)}';
+    }
+    return texto;
   }
-  // --- Fin placeholder repetición ---
+
+  void _gestionarRepeticion() async {
+    final ReglaRepeticion? nuevaRegla = await showDialog<ReglaRepeticion>(
+      context: context,
+      builder: (BuildContext context) {
+        return DialogoConfigurarRepeticion(
+          // Usamos el diálogo real
+          reglaInicial: _reglaRepeticionSeleccionada,
+        );
+      },
+    );
+
+    if (mounted && nuevaRegla != _reglaRepeticionSeleccionada) {
+      setState(() {
+        _reglaRepeticionSeleccionada = nuevaRegla;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Para formatear la fecha y hora en los botones
     final formatoFecha = DateFormat('dd/MM/yyyy', 'es');
 
     return Padding(
@@ -259,8 +349,9 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                   prefixIcon: Icon(Icons.title),
                 ),
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty)
+                  if (value == null || value.trim().isEmpty) {
                     return 'El título es obligatorio';
+                  }
                   return null;
                 },
               ),
@@ -276,7 +367,6 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
               ),
               const SizedBox(height: 16),
 
-              // Selector de Fecha y Hora de Inicio
               Text("Desde", style: Theme.of(context).textTheme.titleSmall),
               Row(
                 children: [
@@ -288,7 +378,7 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  if (!_esTodoElDia) // Solo mostrar hora si no es "Todo el día"
+                  if (!_esTodoElDia)
                     Expanded(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.access_time, size: 18),
@@ -300,7 +390,6 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
               ),
               const SizedBox(height: 12),
 
-              // Selector de Fecha y Hora de Fin
               Text("Hasta", style: Theme.of(context).textTheme.titleSmall),
               Row(
                 children: [
@@ -312,7 +401,7 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  if (!_esTodoElDia) // Solo mostrar hora si no es "Todo el día"
+                  if (!_esTodoElDia)
                     Expanded(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.access_time_outlined, size: 18),
@@ -324,7 +413,6 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
               ),
               const SizedBox(height: 12),
 
-              // Checkbox para "Todo el día"
               Row(
                 children: [
                   Checkbox(
@@ -332,11 +420,6 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                     onChanged: (bool? value) {
                       setState(() {
                         _esTodoElDia = value ?? false;
-                        if (_esTodoElDia) {
-                          // Si es todo el día, las horas podrían ser 00:00 a 23:59 lógicamente
-                          // o simplemente ignorarse al guardar el evento.
-                          // Por ahora, solo actualizamos el estado.
-                        }
                       });
                     },
                   ),
@@ -345,17 +428,14 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
               ),
               const SizedBox(height: 12),
 
-              // Botón para gestionar repetición (funcionalidad futura)
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.repeat),
                 title: Text(
-                  _reglaRepeticionSeleccionada == null
-                      ? 'No se repite'
-                      : 'Se repite (detalle pendiente)', // TODO: Mostrar resumen de la regla
-                ),
+                  _obtenerTextoResumenRepeticion(),
+                ), // Usa la función de resumen
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: _gestionarRepeticion,
+                onTap: _gestionarRepeticion, // Llama al diálogo real
                 dense: true,
               ),
               const SizedBox(height: 12),
@@ -382,7 +462,6 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                 ),
                 onPressed: () {
                   if (_formKey.currentState?.validate() ?? false) {
-                    // Combinar fechas y horas para obtener los DateTime completos
                     DateTime fechaInicioCompleta;
                     DateTime fechaFinCompleta;
 
@@ -394,7 +473,7 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                         0,
                         0,
                         0,
-                      ); // Inicio del día
+                      );
                       fechaFinCompleta = DateTime(
                         _fechaFin.year,
                         _fechaFin.month,
@@ -402,8 +481,7 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                         23,
                         59,
                         59,
-                      ); // Fin del día
-                      // Asegurarse que fechaFin no sea anterior a fechaInicio si es todo el día y dura varios días
+                      );
                       if (fechaFinCompleta.isBefore(fechaInicioCompleta)) {
                         fechaFinCompleta = DateTime(
                           fechaInicioCompleta.year,
@@ -425,7 +503,11 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                       );
                     }
 
-                    if (fechaFinCompleta.isBefore(fechaInicioCompleta)) {
+                    if (fechaFinCompleta.isBefore(fechaInicioCompleta) ||
+                        (!_esTodoElDia &&
+                            fechaFinCompleta.isAtSameMomentAs(
+                              fechaInicioCompleta,
+                            ))) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text(
@@ -443,12 +525,10 @@ class _CrearEventoFormState extends State<CrearEventoForm> {
                       descripcion: _descripcionCtrl.text.trim(),
                       fechaInicio: fechaInicioCompleta,
                       fechaFin: fechaFinCompleta,
-                      esTodoElDia: _esTodoElDia, // Guardar el nuevo campo
+                      esTodoElDia: _esTodoElDia,
                       color: _colorSeleccionado,
-                      reglaRepeticion:
-                          _reglaRepeticionSeleccionada, // Guardar la regla
+                      reglaRepeticion: _reglaRepeticionSeleccionada,
                     );
-                    // Devolver el evento al CalendarioProvider a través de Navigator.pop
                     Navigator.of(context).pop(nuevoEvento);
                   }
                 },

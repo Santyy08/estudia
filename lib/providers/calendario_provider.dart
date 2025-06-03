@@ -1,203 +1,205 @@
 // lib/providers/calendario_provider.dart
+import 'dart:async'; // Para StreamSubscription
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
-// Importa los modelos y formularios actualizados
+import 'package:uuid/uuid.dart'; // Asegúrate que Uuid esté en pubspec.yaml
+import 'package:intl/intl.dart'; // Para formateo en el resumen de repetición
+
 import '../widgets/tarjeta_eventos.dart';
 import '../widgets/crear_evento_form.dart';
 import '../widgets/editar_evento_form.dart';
+import '../servicios/firestore_service.dart'; // Importa tu servicio de Firestore
 
-// Enum para las vistas del calendario (ya lo tenías, solo para asegurar que esté aquí)
 enum VistaCalendario { Mes, Semana, Dia, Agenda }
 
 class CalendarioProvider extends ChangeNotifier {
   final Uuid _uuid = const Uuid();
+  final FirestoreService _firestoreService = FirestoreService();
+  final String userId; // Para identificar al usuario en Firestore
 
   VistaCalendario _vistaSeleccionada = VistaCalendario.Mes;
-  DateTime _fechaSeleccionada = DateTime.now();
+  DateTime _fechaSeleccionada = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
+  DateTime _focusedDayForTableCalendar = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
 
-  // Lista principal de eventos. Aquí guardaremos solo los eventos "plantilla" o "raíz".
-  // Las ocurrencias de eventos recurrentes se generarán al vuelo.
-  final List<TarjetaEventos> _eventosRaiz = [];
+  List<TarjetaEventos> _eventosRaiz =
+      []; // Eventos "plantilla" cargados de Firestore
+  StreamSubscription? _eventosSubscription;
 
-  CalendarioProvider() {
-    // Inicializar con algunos eventos de ejemplo usando la nueva estructura
-    _cargarEventosDeEjemplo();
+  CalendarioProvider(this.userId) {
+    // print("CalendarioProvider inicializado para userId: $userId");
+    if (userId.isEmpty) {
+      print(
+        "ADVERTENCIA: userId está vacío en CalendarioProvider. Los eventos no se cargarán/guardarán.",
+      );
+      return;
+    }
+    _escucharEventosDeFirestore();
   }
 
+  void _escucharEventosDeFirestore() {
+    _eventosSubscription?.cancel(); // Cancela suscripción anterior si existe
+    _eventosSubscription = _firestoreService
+        .obtenerEventosStream(userId)
+        .listen(
+          (eventosDesdeFirestore) {
+            _eventosRaiz = eventosDesdeFirestore;
+            // print('Eventos cargados/actualizados desde Firestore: ${_eventosRaiz.length} para userId: $userId');
+            notifyListeners();
+          },
+          onError: (error) {
+            print(
+              'Error al escuchar eventos de Firestore para userId $userId: $error',
+            );
+            _eventosRaiz =
+                []; // En caso de error, limpiar eventos para evitar datos corruptos
+            notifyListeners();
+          },
+        );
+  }
+
+  @override
+  void dispose() {
+    _eventosSubscription?.cancel();
+    super.dispose();
+  }
+
+  // GETTERS
   VistaCalendario get vistaSeleccionada => _vistaSeleccionada;
   DateTime get fechaSeleccionada => _fechaSeleccionada;
+  List<TarjetaEventos> get eventos => List.unmodifiable(
+    _generarOcurrenciasParaRangoVisual(),
+  ); // Genera ocurrencias al vuelo
 
-  // Este getter ahora generará las ocurrencias de eventos recurrentes para la vista
-  List<TarjetaEventos> get eventos {
-    // Por ahora, devolvemos los eventos raíz. La generación de ocurrencias se hará
-    // en las funciones específicas como eventosDelDia, eventosDeLaSemana, etc.
-    // O, si se quiere una lista "plana" de todas las ocurrencias en un rango,
-    // se necesitaría una lógica más compleja aquí. Para simplificar, empezamos así.
-    return List.unmodifiable(_generarOcurrenciasParaRangoVisual());
-  }
-
-  void _cargarEventosDeEjemplo() {
-    _eventosRaiz.addAll([
-      TarjetaEventos(
-        id: _uuid.v4(),
-        titulo: 'Clase Historia del Arte',
-        descripcion: 'Ver capítulo sobre el Renacimiento.',
-        fechaInicio: DateTime(2025, 4, 8, 9, 0),
-        fechaFin: DateTime(2025, 4, 8, 10, 0),
-        esTodoElDia: false,
-        color: Colors.blue.withOpacity(0.2),
-        etiquetas: ['Clase'],
-      ),
-      TarjetaEventos(
-        id: _uuid.v4(),
-        titulo: 'Tarea: Leer capítulo 5',
-        descripcion: 'Leer capítulo 5 del libro de texto.',
-        fechaInicio: DateTime(2025, 4, 9, 9, 0),
-        fechaFin: DateTime(2025, 4, 9, 10, 0),
-        esTodoElDia: false,
-        color: Colors.lightGreen.withOpacity(0.2),
-        etiquetas: ['Tarea'],
-      ),
-      TarjetaEventos(
-        id: _uuid.v4(),
-        titulo: 'Estudiar álgebra',
-        descripcion: 'Resolver ejercicios de ecuaciones diferenciales.',
-        fechaInicio: DateTime(2025, 4, 10, 10, 30),
-        fechaFin: DateTime(2025, 4, 10, 11, 30),
-        esTodoElDia: false,
-        color: Colors.purple.withOpacity(0.2),
-        etiquetas: ['Objetivo'],
-      ),
-      TarjetaEventos(
-        id: _uuid.v4(),
-        titulo: 'Clase Filosofía',
-        descripcion: 'Debate sobre ética y moral.',
-        fechaInicio: DateTime(2025, 4, 11, 11, 0),
-        fechaFin: DateTime(2025, 4, 11, 12, 0),
-        esTodoElDia: false,
-        color: Colors.orange.withOpacity(0.2),
-        etiquetas: ['Clase'],
-      ),
-      TarjetaEventos(
-        id: _uuid.v4(),
-        titulo: 'Reunión de Proyecto',
-        descripcion: 'Discutir avances y próximos pasos.',
-        fechaInicio: DateTime(2025, 4, 16, 14, 0),
-        fechaFin: DateTime(2025, 4, 16, 15, 0),
-        esTodoElDia: false,
-        color: Colors.teal.withOpacity(0.2),
-        etiquetas: ['Reunión'],
-      ),
-      TarjetaEventos(
-        id: _uuid.v4(),
-        titulo: 'Preparar Presentación',
-        descripcion: 'Finalizar diapositivas para el viernes.',
-        fechaInicio: DateTime(2025, 4, 17, 10, 0),
-        fechaFin: DateTime(2025, 4, 17, 12, 0),
-        esTodoElDia: false,
-        color: Colors.indigo.withOpacity(0.2),
-        etiquetas: ['Estudio'],
-      ),
-      // Ejemplo de evento recurrente (semanal)
-      TarjetaEventos(
-        id: _uuid.v4(),
-        titulo: 'Clase de Yoga Semanal',
-        fechaInicio: DateTime(2025, 4, 7, 18, 0), // Lunes 7 de Abril
-        fechaFin: DateTime(2025, 4, 7, 19, 0),
-        color: Colors.pink.withOpacity(0.2),
-        esTodoElDia: false,
-        reglaRepeticion: ReglaRepeticion(
-          frecuencia: TipoFrecuenciaRepeticion.semanal,
-          intervalo: 1,
-          diasSemana: [DateTime.monday], // Se repite todos los lunes
-          fechaFinRepeticion: DateTime(2025, 6, 30), // Hasta fin de Junio
-        ),
-        etiquetas: ['Bienestar', 'Clase'],
-      ),
-      TarjetaEventos(
-        id: _uuid.v4(),
-        titulo: 'Cumpleaños de Ana',
-        fechaInicio: DateTime(2025, 5, 10), // 10 de Mayo
-        fechaFin: DateTime(2025, 5, 10, 23, 59, 59), // Fin del día
-        esTodoElDia: true, // Evento de todo el día
-        color: Colors.amber.withOpacity(0.3),
-        etiquetas: ['Personal', 'Cumpleaños'],
-      ),
-    ]);
-  }
-
+  // SETTERS / ACTIONS
   void cambiarVista(VistaCalendario vista) {
     _vistaSeleccionada = vista;
     notifyListeners();
   }
 
   void cambiarFechaSeleccionada(DateTime fecha) {
-    // Normalizar a solo fecha para evitar problemas con la hora al comparar días
     _fechaSeleccionada = DateTime(fecha.year, fecha.month, fecha.day);
+    // Si la vista es Mes, también actualizamos el foco de TableCalendar
+    if (_vistaSeleccionada == VistaCalendario.Mes) {
+      setFocusedDayForTableCalendar(_fechaSeleccionada);
+    }
     notifyListeners();
   }
 
+  void setFocusedDayForTableCalendar(DateTime day) {
+    _focusedDayForTableCalendar = DateTime(day.year, day.month, day.day);
+    // No es necesario notificar listeners aquí usualmente, ya que TableCalendar maneja su propio estado de foco
+    // pero sí es importante para que _generarOcurrenciasParaRangoVisual funcione bien para la vista de mes.
+    if (_vistaSeleccionada == VistaCalendario.Mes) {
+      notifyListeners(); // Para que la lista de eventos debajo del mes se actualice si depende de _focusedDay
+    }
+  }
+
   Future<void> guardarEvento(TarjetaEventos evento) async {
-    // Si el evento ya existe (por ID), lo reemplazamos. Sino, lo añadimos.
+    if (userId.isEmpty) {
+      print("Error: No se puede guardar evento, userId está vacío.");
+      return;
+    }
+    // Optimistic update (actualiza UI local primero)
     final index = _eventosRaiz.indexWhere((e) => e.id == evento.id);
+    bool esNuevo = false;
     if (index != -1) {
       _eventosRaiz[index] = evento;
     } else {
       _eventosRaiz.add(evento);
+      esNuevo = true;
     }
-    // Aquí iría la lógica para guardar en Firestore
     notifyListeners();
+
+    try {
+      if (esNuevo) {
+        await _firestoreService.agregarEvento(evento, userId);
+      } else {
+        await _firestoreService.actualizarEvento(evento, userId);
+      }
+    } catch (e) {
+      print('Error al guardar evento en Firestore: $e');
+      // Considerar revertir el optimistic update o mostrar error al usuario
+      // Por ahora, si falla, la UI local queda con el cambio pero no se persiste.
+      // Para revertir, necesitarías cargar de nuevo desde Firestore o guardar el estado anterior.
+    }
   }
 
-  void eliminarEvento(String id) {
-    _eventosRaiz.removeWhere((e) => e.id == id);
-    // Aquí iría la lógica para eliminar de Firestore
-    // También, si el evento era recurrente, se necesitaría una lógica para
-    // eliminar todas sus futuras ocurrencias o solo la serie.
+  Future<void> eliminarEvento(String eventoId) async {
+    if (userId.isEmpty) {
+      print("Error: No se puede eliminar evento, userId está vacío.");
+      return;
+    }
+    // Optimistic update
+    final eventoOriginal = _eventosRaiz.firstWhere(
+      (e) => e.id == eventoId,
+      orElse:
+          () => TarjetaEventos(
+            id: '',
+            titulo: '',
+            fechaInicio: DateTime.now(),
+            fechaFin: DateTime.now(),
+          ),
+    ); // Necesitamos una forma de manejar el orElse que no lance error
+    _eventosRaiz.removeWhere((e) => e.id == eventoId);
     notifyListeners();
+
+    try {
+      await _firestoreService.eliminarEvento(eventoId, userId);
+    } catch (e) {
+      print('Error al eliminar evento en Firestore: $e');
+      // Revertir si falla (re-añadir eventoOriginal a _eventosRaiz)
+      // _eventosRaiz.add(eventoOriginal); // Ejemplo simple de revertir
+      // notifyListeners();
+    }
   }
 
   Future<void> abrirFormularioEvento(
     BuildContext context, {
     TarjetaEventos? evento,
+    DateTime? fechaSugerida,
   }) async {
-    final resultado = await showModalBottomSheet<TarjetaEventos?>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor:
-          Colors
-              .transparent, // Para que el Container interno defina el color y bordes
-      builder:
-          (_) => Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                color:
-                    Theme.of(
-                      context,
-                    ).cardColor, // Usa el color de fondo de las tarjetas del tema
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
+    final TarjetaEventos? resultado =
+        await showModalBottomSheet<TarjetaEventos?>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder:
+              (_) => Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                  ),
+                  child:
+                      evento == null
+                          ? CrearEventoForm(
+                            fechaInicialSeleccionada:
+                                fechaSugerida ?? _fechaSeleccionada,
+                          )
+                          : EditarEventoForm(evento: evento),
                 ),
               ),
-              child:
-                  evento == null
-                      ? const CrearEventoForm()
-                      : EditarEventoForm(evento: evento),
-            ),
-          ),
-    );
+        );
 
     if (resultado != null) {
       await guardarEvento(resultado);
     }
   }
 
-  // --- Lógica para generar ocurrencias de eventos ---
-
+  // --- LÓGICA DE GENERACIÓN DE OCURRENCIAS (Mantenida y mejorada) ---
   List<TarjetaEventos> _generarOcurrencias(
     TarjetaEventos eventoRaiz,
     DateTime rangoInicio,
@@ -206,7 +208,7 @@ class CalendarioProvider extends ChangeNotifier {
     List<TarjetaEventos> ocurrencias = [];
 
     if (eventoRaiz.reglaRepeticion == null) {
-      // Evento no recurrente, solo verificar si cae en el rango
+      // Evento no recurrente
       if (!(eventoRaiz.fechaFin.isBefore(rangoInicio) ||
           eventoRaiz.fechaInicio.isAfter(rangoFin))) {
         ocurrencias.add(eventoRaiz);
@@ -220,147 +222,205 @@ class CalendarioProvider extends ChangeNotifier {
       eventoRaiz.fechaInicio,
     );
 
-    while (fechaActualOcurrencia.isBefore(rangoFin) &&
+    int contadorSeguridad = 0;
+    final int maxOcurrenciasSeguridad =
+        730; // Limitar a ~2 años de ocurrencias por evento raíz
+
+    while (fechaActualOcurrencia.isBefore(
+          rangoFin.add(const Duration(days: 1)),
+        ) && // Comparar hasta el final del día de rangoFin
         (regla.fechaFinRepeticion == null ||
-            fechaActualOcurrencia.isBefore(regla.fechaFinRepeticion!))) {
-      // Solo añadir si la ocurrencia actual está dentro del rango visible Y después del inicio original del evento raíz
+            fechaActualOcurrencia.isBefore(
+              regla.fechaFinRepeticion!.add(const Duration(days: 1)),
+            )) &&
+        contadorSeguridad < maxOcurrenciasSeguridad) {
+      contadorSeguridad++;
+
       if (!fechaActualOcurrencia.isBefore(rangoInicio) &&
           !fechaActualOcurrencia.isBefore(eventoRaiz.fechaInicio)) {
         ocurrencias.add(
           eventoRaiz.copyWith(
-            // Creamos una nueva instancia para esta ocurrencia, manteniendo el ID original
-            // o podríamos generar IDs únicos por ocurrencia si fuera necesario para excepciones.
-            // Por ahora, se usa el mismo ID, asumiendo que la edición afecta a la serie.
-            fechaInicio: fechaActualOcurrencia,
-            fechaFin: fechaActualOcurrencia.add(duracionEvento),
-            // Importante: la regla de repetición no se copia a las instancias individuales generadas
-            // para evitar bucles infinitos al generar ocurrencias de ocurrencias.
-            // Las instancias son solo eso, instancias, no nuevas series.
-            reglaRepeticion:
-                () => null, // Las ocurrencias no tienen su propia regla
+            id: eventoRaiz.id, // Mantener ID original para la serie
+            fechaInicio: DateTime(
+              fechaActualOcurrencia.year,
+              fechaActualOcurrencia.month,
+              fechaActualOcurrencia.day,
+              eventoRaiz.fechaInicio.hour,
+              eventoRaiz.fechaInicio.minute,
+            ),
+            fechaFin: DateTime(
+              fechaActualOcurrencia.year,
+              fechaActualOcurrencia.month,
+              fechaActualOcurrencia.day,
+              eventoRaiz.fechaInicio.hour,
+              eventoRaiz.fechaInicio.minute,
+            ).add(duracionEvento),
+            reglaRepeticion: () => null,
           ),
         );
       }
 
-      // Avanzar a la siguiente ocurrencia según la regla
+      if (fechaActualOcurrencia.isAfter(rangoFin) &&
+          (regla.fechaFinRepeticion != null &&
+              fechaActualOcurrencia.isAfter(regla.fechaFinRepeticion!))) {
+        break; // Optimización: si ya pasamos ambos rangos
+      }
+
+      DateTime siguienteTentativa = fechaActualOcurrencia;
       switch (regla.frecuencia) {
         case TipoFrecuenciaRepeticion.diaria:
-          fechaActualOcurrencia = fechaActualOcurrencia.add(
+          siguienteTentativa = fechaActualOcurrencia.add(
             Duration(days: regla.intervalo),
           );
           break;
         case TipoFrecuenciaRepeticion.semanal:
-          if (regla.diasSemana == null || regla.diasSemana!.isEmpty) {
-            // Si no hay diasSemana definidos, se repite X semanas después en el mismo día de la semana
-            fechaActualOcurrencia = fechaActualOcurrencia.add(
-              Duration(days: 7 * regla.intervalo),
-            );
+          DateTime tempDate = fechaActualOcurrencia;
+          if (ocurrencias.isNotEmpty &&
+              ocurrencias.last.fechaInicio.year == fechaActualOcurrencia.year &&
+              ocurrencias.last.fechaInicio.month ==
+                  fechaActualOcurrencia.month &&
+              ocurrencias.last.fechaInicio.day == fechaActualOcurrencia.day) {
+            tempDate = tempDate.add(
+              const Duration(days: 1),
+            ); // Asegurar avance si ya se añadió para este día
+          } else if (contadorSeguridad == 1 &&
+              (regla.diasSemana?.contains(tempDate.weekday) ?? false)) {
+            // No avanzar el primer día si ya coincide con un día de la semana de la regla
           } else {
-            // Buscar el siguiente día de la semana en la lista que coincida,
-            // avanzando las semanas necesarias según el intervalo.
-            DateTime proximaFecha = fechaActualOcurrencia;
-            do {
-              proximaFecha = proximaFecha.add(const Duration(days: 1));
-              // Si hemos pasado al siguiente ciclo de intervalo semanal, buscamos desde el inicio de ese ciclo.
-              if (proximaFecha.weekday == eventoRaiz.fechaInicio.weekday &&
-                  proximaFecha.difference(fechaActualOcurrencia).inDays >=
-                      7 * (regla.intervalo - 1) &&
-                  !regla.diasSemana!.contains(proximaFecha.weekday)) {
-                // Avanzar al inicio de la siguiente semana de intervalo
-                int diasParaLunes =
-                    (DateTime.monday - proximaFecha.weekday + 7) % 7;
-                proximaFecha = DateTime(
-                  proximaFecha.year,
-                  proximaFecha.month,
-                  proximaFecha.day,
-                ).add(Duration(days: diasParaLunes));
-                proximaFecha = proximaFecha.add(
-                  Duration(days: 7 * (regla.intervalo - 1)),
-                ); // Saltar semanas de intervalo
+            tempDate = tempDate.add(const Duration(days: 1));
+          }
+
+          int diasBuscadosEnCiclo = 0;
+          bool encontradaEnCiclo = false;
+          while (diasBuscadosEnCiclo < (7 * regla.intervalo)) {
+            if ((regla.diasSemana?.contains(tempDate.weekday) ??
+                    (tempDate.weekday == eventoRaiz.fechaInicio.weekday)) &&
+                tempDate.isAfter(fechaActualOcurrencia)) {
+              // Comprobar si estamos en el intervalo correcto de semanas
+              int semanasCompletasDesdeInicio =
+                  (DateTime(tempDate.year, tempDate.month, tempDate.day)
+                              .difference(
+                                DateTime(
+                                  eventoRaiz.fechaInicio.year,
+                                  eventoRaiz.fechaInicio.month,
+                                  eventoRaiz.fechaInicio.day,
+                                ),
+                              )
+                              .inDays /
+                          7)
+                      .floor();
+
+              if (semanasCompletasDesdeInicio % regla.intervalo == 0) {
+                siguienteTentativa = tempDate;
+                encontradaEnCiclo = true;
+                break;
               }
-            } while (!regla.diasSemana!.contains(proximaFecha.weekday) ||
-                proximaFecha.isAtSameMomentAs(fechaActualOcurrencia) ||
-                proximaFecha.isBefore(fechaActualOcurrencia));
-            fechaActualOcurrencia = DateTime(
-              proximaFecha.year,
-              proximaFecha.month,
-              proximaFecha.day,
+            }
+            tempDate = tempDate.add(const Duration(days: 1));
+            diasBuscadosEnCiclo++;
+          }
+          if (!encontradaEnCiclo) {
+            // Si no se encontró en el ciclo, saltar al siguiente intervalo de semanas
+            int diasParaInicioIntervalo =
+                (7 * regla.intervalo) -
+                (fechaActualOcurrencia
+                        .difference(eventoRaiz.fechaInicio)
+                        .inDays %
+                    (7 * regla.intervalo));
+            if (diasParaInicioIntervalo == (7 * regla.intervalo)) {
+              diasParaInicioIntervalo =
+                  0; // Ya estamos al inicio de un intervalo
+            }
+            siguienteTentativa = fechaActualOcurrencia.add(
+              Duration(
+                days:
+                    diasParaInicioIntervalo == 0
+                        ? 7 * regla.intervalo
+                        : diasParaInicioIntervalo,
+              ),
+            );
+            // Y luego buscar el primer día válido de la semana
+            diasBuscadosEnCiclo = 0;
+            while (diasBuscadosEnCiclo < 7) {
+              if (regla.diasSemana?.contains(siguienteTentativa.weekday) ??
+                  (siguienteTentativa.weekday ==
+                      eventoRaiz.fechaInicio.weekday)) {
+                break;
+              }
+              siguienteTentativa = siguienteTentativa.add(
+                const Duration(days: 1),
+              );
+              diasBuscadosEnCiclo++;
+            }
+          }
+
+          break;
+        case TipoFrecuenciaRepeticion.mensual:
+          int currentMonth = fechaActualOcurrencia.month;
+          int currentYear = fechaActualOcurrencia.year;
+          int targetDay = regla.diaDelMes ?? eventoRaiz.fechaInicio.day;
+
+          currentMonth += regla.intervalo;
+          while (currentMonth > 12) {
+            currentMonth -= 12;
+            currentYear++;
+          }
+
+          int daysInMonth = DateTime(currentYear, currentMonth + 1, 0).day;
+          siguienteTentativa = DateTime(
+            currentYear,
+            currentMonth,
+            targetDay > daysInMonth
+                ? daysInMonth
+                : targetDay, // Ajustar al último día si targetDay no existe
+            eventoRaiz.fechaInicio.hour,
+            eventoRaiz.fechaInicio.minute,
+          );
+          // Si la siguiente fecha calculada es anterior o igual a la actual (ej. al cambiar de un mes largo a uno corto)
+          // y el día objetivo es el mismo, forzar avance al siguiente mes de intervalo.
+          if (siguienteTentativa.isBefore(fechaActualOcurrencia) ||
+              siguienteTentativa.isAtSameMomentAs(fechaActualOcurrencia)) {
+            currentMonth =
+                siguienteTentativa.month + regla.intervalo; // Avanzar de nuevo
+            currentYear = siguienteTentativa.year;
+            while (currentMonth > 12) {
+              currentMonth -= 12;
+              currentYear++;
+            }
+            daysInMonth = DateTime(currentYear, currentMonth + 1, 0).day;
+            siguienteTentativa = DateTime(
+              currentYear,
+              currentMonth,
+              targetDay > daysInMonth ? daysInMonth : targetDay,
               eventoRaiz.fechaInicio.hour,
               eventoRaiz.fechaInicio.minute,
             );
           }
           break;
-        case TipoFrecuenciaRepeticion.mensual:
-          // Lógica simplificada: suma X meses al día original.
-          // Una lógica más robusta manejaría finales de mes (ej. repetir el último día del mes).
-          int nuevoMes = fechaActualOcurrencia.month + regla.intervalo;
-          int nuevoAnio = fechaActualOcurrencia.year;
-          while (nuevoMes > 12) {
-            nuevoMes -= 12;
-            nuevoAnio++;
-          }
-          // Intentar mantener el mismo día, si no existe (ej. 31 de Feb), ir al último día válido.
-          int dia = regla.diaDelMes ?? eventoRaiz.fechaInicio.day;
-          int diasEnMes =
-              DateTime(
-                nuevoAnio,
-                nuevoMes + 1,
-                0,
-              ).day; // Día 0 del mes siguiente es el último del actual
-          if (dia > diasEnMes) {
-            dia = diasEnMes;
-          }
-          fechaActualOcurrencia = DateTime(
-            nuevoAnio,
-            nuevoMes,
-            dia,
-            eventoRaiz.fechaInicio.hour,
-            eventoRaiz.fechaInicio.minute,
-          );
-          break;
         case TipoFrecuenciaRepeticion.anual:
-          int anio = fechaActualOcurrencia.year + regla.intervalo;
-          int mes = regla.mesDelAnio ?? eventoRaiz.fechaInicio.month;
-          int dia =
-              regla.diaDelMes ??
-              eventoRaiz.fechaInicio.day; // Podría ser más específico
-          int diasEnMes = DateTime(anio, mes + 1, 0).day;
-          if (dia > diasEnMes) {
-            dia = diasEnMes;
-          }
-          fechaActualOcurrencia = DateTime(
-            anio,
-            mes,
-            dia,
+          siguienteTentativa = DateTime(
+            fechaActualOcurrencia.year + regla.intervalo,
+            regla.mesDelAnio ?? eventoRaiz.fechaInicio.month,
+            regla.diaDelMes ?? eventoRaiz.fechaInicio.day,
             eventoRaiz.fechaInicio.hour,
             eventoRaiz.fechaInicio.minute,
           );
           break;
       }
-      // Pequeña salvaguarda para evitar bucles si la fecha no avanza
-      if (ocurrencias.isNotEmpty &&
-          fechaActualOcurrencia.isAtSameMomentAs(
-            ocurrencias.last.fechaInicio,
-          )) {
-        break;
+
+      if (siguienteTentativa.isAtSameMomentAs(fechaActualOcurrencia) ||
+          siguienteTentativa.isBefore(fechaActualOcurrencia)) {
+        // print("Advertencia: No se pudo avanzar la fecha para evento ${eventoRaiz.titulo}. Forzando salida del bucle de recurrencia.");
+        contadorSeguridad = maxOcurrenciasSeguridad; // Forzar salida
       }
+      fechaActualOcurrencia = siguienteTentativa;
     }
     return ocurrencias;
   }
 
-  // Método para obtener el rango de fechas que las vistas suelen necesitar
   List<TarjetaEventos> _generarOcurrenciasParaRangoVisual() {
     DateTime rangoInicio;
     DateTime rangoFin;
-
-    // Define un rango amplio para asegurar que todas las vistas tengan datos,
-    // podrías optimizar esto para cada vista si es necesario.
-    // Por ejemplo, la vista mensual podría necesitar un rango de ~42 días.
-    // La vista semanal, 7 días. La vista diaria, 1 día.
-    // La agenda, desde hoy hasta X tiempo en el futuro.
-    // Para empezar, un rango genérico grande:
-    rangoInicio = _fechaSeleccionada.subtract(const Duration(days: 45));
-    rangoFin = _fechaSeleccionada.add(const Duration(days: 45));
 
     if (_vistaSeleccionada == VistaCalendario.Dia) {
       rangoInicio = DateTime(
@@ -382,7 +442,7 @@ class CalendarioProvider extends ChangeNotifier {
     } else if (_vistaSeleccionada == VistaCalendario.Semana) {
       rangoInicio = _fechaSeleccionada.subtract(
         Duration(days: _fechaSeleccionada.weekday % 7),
-      ); // Domingo
+      );
       rangoInicio = DateTime(
         rangoInicio.year,
         rangoInicio.month,
@@ -393,26 +453,37 @@ class CalendarioProvider extends ChangeNotifier {
       );
       rangoFin = rangoInicio.add(
         const Duration(days: 6, hours: 23, minutes: 59, seconds: 59),
-      ); // Sábado fin de día
+      );
     } else if (_vistaSeleccionada == VistaCalendario.Mes) {
-      // Para table_calendar, él mismo pide los eventos por día.
-      // Pero si quisiéramos una lista "plana" para el mes, sería algo así:
       final primerDiaDelMesMostrado = DateTime(
         _focusedDayForTableCalendar.year,
         _focusedDayForTableCalendar.month,
         1,
       );
-      rangoInicio = primerDiaDelMesMostrado.subtract(
-        Duration(days: primerDiaDelMesMostrado.weekday % 7),
+      rangoInicio = DateTime(
+        primerDiaDelMesMostrado.year,
+        primerDiaDelMesMostrado.month,
+        1,
+      ).subtract(const Duration(days: 7));
+      rangoFin = DateTime(
+        primerDiaDelMesMostrado.year,
+        primerDiaDelMesMostrado.month + 1,
+        0,
+      ).add(const Duration(days: 7, hours: 23, minutes: 59, seconds: 59));
+    } else if (_vistaSeleccionada == VistaCalendario.Agenda) {
+      rangoInicio = DateTime(
+        DateTime.now().year,
+        DateTime.now().month,
+        DateTime.now().day,
       );
       rangoFin = rangoInicio.add(
-        const Duration(days: 41, hours: 23, minutes: 59, seconds: 59),
-      ); // 6 semanas
-    } else if (_vistaSeleccionada == VistaCalendario.Agenda) {
-      rangoInicio = DateTime.now();
-      rangoFin = rangoInicio.add(
-        const Duration(days: 90),
-      ); // Agenda para los próximos 90 días
+        const Duration(days: 90, hours: 23, minutes: 59, seconds: 59),
+      );
+    } else {
+      rangoInicio = _fechaSeleccionada.subtract(const Duration(days: 30));
+      rangoFin = _fechaSeleccionada.add(
+        const Duration(days: 30, hours: 23, minutes: 59, seconds: 59),
+      );
     }
 
     List<TarjetaEventos> todasLasOcurrencias = [];
@@ -422,20 +493,10 @@ class CalendarioProvider extends ChangeNotifier {
       );
     }
 
-    // Ordenar por fecha de inicio
     todasLasOcurrencias.sort((a, b) => a.fechaInicio.compareTo(b.fechaInicio));
     return todasLasOcurrencias;
   }
 
-  // Necesario para la vista de mes (TableCalendar)
-  DateTime _focusedDayForTableCalendar = DateTime.now();
-  void setFocusedDayForTableCalendar(DateTime day) {
-    _focusedDayForTableCalendar = day;
-    // No necesariamente notificamos listeners aquí, TableCalendar lo maneja internamente
-    // pero lo necesitamos para _generarOcurrenciasParaRangoVisual si optimizamos para mes.
-  }
-
-  // Funciones específicas para cada vista, usando la generación de ocurrencias
   List<TarjetaEventos> eventosDelDia(DateTime dia) {
     final inicioDelDia = DateTime(dia.year, dia.month, dia.day, 0, 0, 0);
     final finDelDia = DateTime(dia.year, dia.month, dia.day, 23, 59, 59);
@@ -452,7 +513,7 @@ class CalendarioProvider extends ChangeNotifier {
   List<TarjetaEventos> eventosDeLaSemana(DateTime diaEnLaSemana) {
     DateTime inicioSemana = diaEnLaSemana.subtract(
       Duration(days: diaEnLaSemana.weekday % 7),
-    ); // Domingo
+    );
     inicioSemana = DateTime(
       inicioSemana.year,
       inicioSemana.month,
@@ -463,7 +524,7 @@ class CalendarioProvider extends ChangeNotifier {
     );
     DateTime finSemana = inicioSemana.add(
       const Duration(days: 6, hours: 23, minutes: 59, seconds: 59),
-    ); // Sábado
+    );
 
     List<TarjetaEventos> ocurrenciasSemana = [];
     for (var eventoRaiz in _eventosRaiz) {
@@ -476,12 +537,6 @@ class CalendarioProvider extends ChangeNotifier {
   }
 
   List<TarjetaEventos> eventosDelMes(DateTime diaEnElMes) {
-    // Para table_calendar, es mejor que él pida por día.
-    // Esta función ahora podría devolver eventos cuya serie *comienza* en ese mes,
-    // o usar un rango como en _generarOcurrenciasParaRangoVisual.
-    // Por simplicidad y para que coincida con la lógica de table_calendar,
-    // es mejor que table_calendar use `eventosDelDia`.
-    // Si se necesita una lista de todos los eventos que "tocan" un mes:
     final inicioDelMes = DateTime(diaEnElMes.year, diaEnElMes.month, 1);
     final finDelMes = DateTime(
       diaEnElMes.year,
@@ -490,7 +545,7 @@ class CalendarioProvider extends ChangeNotifier {
       23,
       59,
       59,
-    ); // Día 0 del mes siguiente
+    );
 
     List<TarjetaEventos> ocurrenciasMes = [];
     for (var eventoRaiz in _eventosRaiz) {
@@ -504,64 +559,29 @@ class CalendarioProvider extends ChangeNotifier {
 
   List<TarjetaEventos> eventosParaAgenda() {
     final ahora = DateTime.now();
-    // Por ejemplo, los próximos 365 días. Ajusta según necesidad.
-    final finRangoAgenda = ahora.add(const Duration(days: 365));
+    final inicioRangoAgenda = DateTime(ahora.year, ahora.month, ahora.day);
+    final finRangoAgenda = inicioRangoAgenda.add(
+      const Duration(days: 90, hours: 23, minutes: 59, seconds: 59),
+    );
 
     List<TarjetaEventos> ocurrenciasAgenda = [];
     for (var eventoRaiz in _eventosRaiz) {
-      // Solo considerar eventos cuya serie podría tener ocurrencias futuras
-      if (eventoRaiz.reglaRepeticion == null) {
-        // Evento único
-        if (!eventoRaiz.fechaInicio.isBefore(
-          ahora.subtract(const Duration(days: 1)),
-        )) {
-          // Que no haya pasado ya (con margen)
-          ocurrenciasAgenda.addAll(
-            _generarOcurrencias(
-              eventoRaiz,
-              ahora.subtract(const Duration(days: 1)),
-              finRangoAgenda,
-            ),
-          );
-        }
-      } else {
-        // Evento recurrente
-        if (eventoRaiz.reglaRepeticion!.fechaFinRepeticion == null ||
-            !eventoRaiz.reglaRepeticion!.fechaFinRepeticion!.isBefore(ahora)) {
-          ocurrenciasAgenda.addAll(
-            _generarOcurrencias(
-              eventoRaiz,
-              ahora.subtract(const Duration(days: 1)),
-              finRangoAgenda,
-            ),
-          );
-        }
-      }
+      ocurrenciasAgenda.addAll(
+        _generarOcurrencias(eventoRaiz, inicioRangoAgenda, finRangoAgenda),
+      );
     }
-    // Filtrar para asegurar que solo mostramos desde "hoy" en la agenda
-    ocurrenciasAgenda =
-        ocurrenciasAgenda
-            .where(
-              (e) =>
-                  !e.fechaFin.isBefore(
-                    DateTime(ahora.year, ahora.month, ahora.day),
-                  ),
-            )
-            .toList();
     ocurrenciasAgenda.sort((a, b) => a.fechaInicio.compareTo(b.fechaInicio));
     return ocurrenciasAgenda;
   }
 
-  // Esta función ya no se usa directamente como antes, se llama a las específicas de cada vista.
-  // Podría adaptarse para devolver un conjunto general de eventos si fuera necesario.
   List<TarjetaEventos> eventosFiltrados() {
+    // Esta función es llamada por TableCalendar y otras vistas.
     switch (_vistaSeleccionada) {
       case VistaCalendario.Mes:
-        // La vista de Mes (TableCalendar) llamará a eventosDelDia para cada día.
-        // Si se necesita una lista "plana" para otro propósito, se usa eventosDelMes.
-        // Para el eventLoader de TableCalendar, él se encarga.
-        // Aquí devolvemos un conjunto representativo si se llamase directamente.
-        return eventosDelMes(_fechaSeleccionada);
+        // Para TableCalendar, el eventLoader llama a eventosDelDia.
+        // Si esta función se llamara para obtener todos los eventos del mes visible en la UI,
+        // usaríamos _focusedDayForTableCalendar para definir el mes.
+        return eventosDelMes(_focusedDayForTableCalendar);
       case VistaCalendario.Semana:
         return eventosDeLaSemana(_fechaSeleccionada);
       case VistaCalendario.Dia:

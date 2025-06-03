@@ -7,6 +7,18 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+// Carga las propiedades locales para acceder a flutter.sdk, etc.
+val localProperties = java.util.Properties()
+val localPropertiesFile = rootProject.file("local.properties") // Accede desde el proyecto raíz
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().buffered().use { localProperties.load(it) }
+}
+
+// Define las variables de Flutter o usa valores por defecto
+val flutterVersionCode = localProperties.getProperty("flutter.versionCode")
+val flutterVersionName = localProperties.getProperty("flutter.versionName")
+val flutterMinSdkVersion = localProperties.getProperty("flutter.minSdkVersion")
+val flutterTargetSdkVersion = localProperties.getProperty("flutter.targetSdkVersion")
 
 android {
     namespace = "com.example.estudia"
@@ -22,16 +34,13 @@ android {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
-    defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.estudia"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
-    }
+defaultConfig {
+    applicationId = "com.tu.paquete" // Reemplaza com.tu.paquete con tu ID real
+    minSdkVersion = flutterMinSdkVersion?.toIntOrNull() ?: 21 // Usa el valor de Flutter o 21 por defecto
+    targetSdkVersion = flutterTargetSdkVersion?.toIntOrNull() ?: 34 // Usa el valor de Flutter o 34 por defecto
+    versionCode = flutterVersionCode?.toIntOrNull() ?: 1
+    versionName = flutterVersionName ?: "1.0"
+}
 
     buildTypes {
         release {
